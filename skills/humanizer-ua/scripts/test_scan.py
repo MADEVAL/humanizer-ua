@@ -98,6 +98,28 @@ class ScannerTests(unittest.TestCase):
         self.assertIn("ascii_apostrophe", ids)
         self.assertIn("numbers", ids)
 
+    def test_quoted_text_does_not_fake_space_before_punctuation(self) -> None:
+        clean = "Він сказав «проєкт». Далі пішов."
+        report = scan.build_report(clean, "marketing", None)
+        ids = {item["id"] for item in report["metrics"]}
+        self.assertNotIn("space_before_punct", ids)
+
+        wrong = "Він сказав «проєкт» . Далі пішов."
+        report = scan.build_report(wrong, "marketing", None)
+        ids = {item["id"] for item in report["metrics"]}
+        self.assertIn("space_before_punct", ids)
+
+    def test_code_and_tables_do_not_fake_double_spaces(self) -> None:
+        text = "Текст.\n\n|  A  |  B  |\n|---|---|\n|  1  |  2  |\n\n```\nkey  =  value\n```\n"
+        report = scan.build_report(text, "docs", None)
+        ids = {item["id"] for item in report["metrics"]}
+        self.assertNotIn("double_spaces", ids)
+
+        wrong = "Слово  слово."
+        report = scan.build_report(wrong, "marketing", None)
+        ids = {item["id"] for item in report["metrics"]}
+        self.assertIn("double_spaces", ids)
+
     def test_russian_letters(self) -> None:
         report = scan.build_report("Це проэкт із ёлкою.", "marketing", None)
         ids = {item["id"] for item in report["metrics"]}

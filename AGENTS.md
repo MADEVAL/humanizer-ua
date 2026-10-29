@@ -13,6 +13,8 @@ This repository contains the `humanizer-ua` skill: a Ukrainian text editor for a
 
 ## Checks
 
+Quick check: `make check` runs the same full suite as `validate_package.py --full`.
+
 ```bash
 python scripts/validate_package.py --full
 python -m unittest skills/humanizer-ua/scripts/test_scan.py -v

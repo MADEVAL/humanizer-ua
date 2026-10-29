@@ -37,9 +37,13 @@ def read_text(path: str, encoding: str = "auto") -> str:
     return data.decode("utf-8", errors="replace")
 
 
-def _blank(match: re.Match[str]) -> str:
-    """Замінює фрагмент пробілами, зберігаючи рядки."""
-    return "".join("\n" if ch == "\n" else " " for ch in match.group(0))
+def _hide(match: re.Match[str]) -> str:
+    """Замінює фрагмент невидимими символами, зберігаючи рядки.
+
+    Пробіли тут не годяться: вони створюють фальшивий «пробіл перед
+    розділовим знаком» після цитати або inline-коду.
+    """
+    return "".join("\n" if ch == "\n" else "\u200b" for ch in match.group(0))
 
 
 def mask_segments(text: str) -> str:
@@ -57,7 +61,7 @@ def mask_segments(text: str) -> str:
     )
     masked = text
     for pattern in patterns:
-        masked = re.sub(pattern, _blank, masked, flags=re.DOTALL)
+        masked = re.sub(pattern, _hide, masked, flags=re.DOTALL)
     return masked
 
 

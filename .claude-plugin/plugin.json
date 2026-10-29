@@ -2,7 +2,7 @@
   "name": "humanizer-ua",
   "displayName": "Humanizer UA",
   "description": "Редактура українського тексту: прибирає сліди ШІ, канцелярит, суржик і кальки, зберігаючи зміст і голос автора.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "author": {
     "name": "Yevhen Leonidov",
     "url": "https://github.com/MADEVAL"

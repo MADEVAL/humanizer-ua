@@ -194,8 +194,8 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
 
     # Подвійні пробіли й пробіл перед пунктуацією
     double_spaces = 0
-    for line in raw.splitlines():
-        if line[:1].isspace():
+    for line in masked.splitlines():
+        if line[:1].isspace() or line.lstrip().startswith("|"):
             continue
         double_spaces += len(re.findall(r"\S  +\S", line))
     if double_spaces:
