@@ -2,7 +2,7 @@
 
 Скіл для редагування українського тексту: прибирає сліди ШІ, канцелярит, суржик, русизми й кальки, не змінюючи зміст, факти та голос автора.
 
-[github.com/MADEVAL/humanizer-ua](https://github.com/MADEVAL/humanizer-ua)
+[github.com/MADEVAL/humanizer-ua](https://github.com/MADEVAL/humanizer-ua) · автор: [Yevhen Leonidov](https://github.com/MADEVAL)
 
 Не детектор ШІ. Не генератор «живішого» тексту. Редактор, який видаляє обгортку, а не дописує поверх неї.
 
@@ -45,12 +45,6 @@ cp -r skills/humanizer-ua ~/.claude/skills/
 # Codex
 mkdir -p ~/.codex/skills
 cp -r skills/humanizer-ua ~/.codex/skills/
-```
-
-Або через skills.sh:
-
-```bash
-npx skills add MADEVAL/humanizer-ua
 ```
 
 ### Виклик
