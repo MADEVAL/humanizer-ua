@@ -1,0 +1,16 @@
+{
+  "name": "humanizer-ua",
+  "displayName": "Humanizer UA",
+  "description": "Редактура українського тексту: прибирає сліди ШІ, канцелярит, суржик і кальки, зберігаючи зміст і голос автора.",
+  "version": "1.2.0",
+  "author": {
+    "name": "MADEVAL",
+    "url": "https://github.com/MADEVAL"
+  },
+  "homepage": "https://github.com/MADEVAL/humanizer-ua",
+  "repository": "https://github.com/MADEVAL/humanizer-ua",
+  "license": "MIT",
+  "skills": [
+    "./skills/humanizer-ua"
+  ]
+}
