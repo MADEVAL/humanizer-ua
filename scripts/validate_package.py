@@ -190,6 +190,38 @@ def check_rules() -> None:
         ok("rules-patterns")
 
 
+def check_dist() -> None:
+    """dist/rules-ua.json має бути згенерований із поточних правил."""
+    path = ROOT / "dist" / "rules-ua.json"
+    if not path.exists():
+        fail("dist", "немає dist/rules-ua.json")
+        return
+
+    sys.path.insert(0, str(SKILL / "scripts"))
+    from humanizer_ua.norm import NORM_RULES
+    from humanizer_ua.rules import GENRES, HARD_BANS, MARKERS, WEAK_IDS
+    from humanizer_ua.version import VERSION
+
+    expected = json.loads(
+        json.dumps(
+            {
+                "version": VERSION,
+                "genres": list(GENRES),
+                "weak_ids": sorted(WEAK_IDS),
+                "hard_bans": HARD_BANS,
+                "norm": NORM_RULES,
+                "markers": MARKERS,
+            },
+            ensure_ascii=False,
+        )
+    )
+    actual = json.loads(read(path))
+    if actual != expected:
+        fail("dist", "dist/rules-ua.json застарів; запусти scripts/export_rules.py")
+    else:
+        ok("dist")
+
+
 def check_catalog() -> None:
     catalog = read(SKILL / "references" / "catalog.md")
     entries = re.findall(r"(?m)^### ([A-H])([0-9]+)\. ", catalog)
@@ -300,6 +332,7 @@ def main() -> int:
     check_skill_length()
     check_links()
     check_rules()
+    check_dist()
     check_catalog()
     check_package_layout()
     check_scanner()

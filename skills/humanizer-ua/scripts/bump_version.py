@@ -7,6 +7,7 @@ import argparse
 import datetime as dt
 import json
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -61,6 +62,15 @@ def main(argv: list[str] | None = None) -> int:
             entry = f"## {args.version} — {args.date}\n\n- {args.note}\n\n"
             text = text.replace("# Changelog\n\n", "# Changelog\n\n" + entry, 1)
             changelog.write_text(text, encoding="utf-8")
+
+        exported = subprocess.run(
+            [sys.executable, str(SKILL / "scripts" / "export_rules.py")],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+        )
+        if exported.returncode != 0:
+            raise ValueError(exported.stderr.strip() or "не вдалося оновити dist/rules-ua.json")
     except (OSError, ValueError, json.JSONDecodeError) as error:
         print(f"Помилка: {error}", file=sys.stderr)
         return 2

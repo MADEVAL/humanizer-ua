@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+import codecs
 import re
 import sys
 
@@ -12,11 +13,56 @@ WORD_RE = re.compile(
 SENTENCE_RE = re.compile(r"(?<=[.!?…])\s+")
 EMOJI_RE = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
 RUSSIAN_LETTERS_RE = re.compile(r"[ёыэъЁЫЭЪ]")
+CYRILLIC_RE = re.compile(r"[А-Яа-яІіЇїЄєҐґ]")
+ENCODINGS = ("auto", "utf-8", "utf-8-sig", "cp1251", "utf-16")
+
+
+def normalise_newlines(text: str) -> str:
+    """CRLF і старий Mac CR зводяться до LF.
+
+    Без цього frontmatter із Windows не маскується, а рядки таблиць
+    і абзаци розпізнаються інакше, ніж на Linux.
+    """
+    return text.replace("\r\n", "\n").replace("\r", "\n")
+
+
+def _looks_like_text(text: str) -> bool:
+    """Відсіює бінарний вміст і UTF-16, прочитаний як один байт на символ."""
+    if "\x00" in text:
+        return False
+    controls = sum(1 for char in text if ord(char) < 32 and char not in "\n\r\t")
+    return controls <= max(1, len(text) // 200)
+
+
+def _decode_auto(data: bytes) -> str:
+    if data.startswith(codecs.BOM_UTF16_LE) or data.startswith(codecs.BOM_UTF16_BE):
+        return data.decode("utf-16")
+    if data.startswith(codecs.BOM_UTF8):
+        return data.decode("utf-8-sig")
+
+    for candidate in ("utf-8-sig", "cp1251"):
+        try:
+            text = data.decode(candidate)
+        except UnicodeDecodeError:
+            continue
+        if _looks_like_text(text):
+            return text
+
+    if b"\x00" in data:
+        for candidate in ("utf-16-le", "utf-16-be"):
+            try:
+                text = data.decode(candidate)
+            except UnicodeDecodeError:
+                continue
+            if _looks_like_text(text):
+                return text
+
+    raise ValueError("не вдалося визначити кодування; вкажи --encoding (utf-8, cp1251 або utf-16)")
 
 
 def read_text(path: str, encoding: str = "auto") -> str:
-    """Читає файл або stdin. Auto пробує UTF-8, потім Windows-1251."""
-    if encoding not in ("auto", "utf-8", "utf-8-sig", "cp1251"):
+    """Читає файл або stdin. Auto: UTF-8 (з BOM), UTF-16, потім Windows-1251."""
+    if encoding not in ENCODINGS:
         raise ValueError(f"Непідтримуване кодування: {encoding}")
 
     if path in ("-", ""):
@@ -24,17 +70,14 @@ def read_text(path: str, encoding: str = "auto") -> str:
     else:
         data = Path(path).read_bytes()
 
-    candidates = ["utf-8-sig", "cp1251"] if encoding == "auto" else [encoding]
+    if encoding == "auto":
+        return normalise_newlines(_decode_auto(data))
 
-    last_error: UnicodeDecodeError | None = None
-    for candidate in candidates:
-        try:
-            return data.decode(candidate)
-        except UnicodeDecodeError as error:
-            last_error = error
-    if last_error:
-        return data.decode("utf-8", errors="replace")
-    return data.decode("utf-8", errors="replace")
+    try:
+        text = data.decode(encoding)
+    except UnicodeDecodeError as error:
+        raise ValueError(f"файл не читається як {encoding}: {error}") from error
+    return normalise_newlines(text)
 
 
 def _hide(match: re.Match[str]) -> str:
@@ -51,7 +94,7 @@ def _hide_text(text: str) -> str:
 
 
 PROTECTED_PATTERNS = (
-    r"\A---\n.*?\n---\n",
+    r"\A---\r?\n.*?\r?\n---(?:\r?\n|\Z)",
     r"```.*?```",
     r"~~~.*?~~~",
     r"`[^`\n]*`",
@@ -194,14 +237,39 @@ UK_LETTERS = set("іїєґІЇЄҐ")
 RU_LETTERS = set("ыэъёЫЭЪЁ")
 
 STOPWORD_RE = re.compile(r"[А-Яа-яЁёІіЇїЄєҐґ]+")
+LATIN_WORD_RE = re.compile(r"[A-Za-z][A-Za-z-]*")
+
+
+def has_cyrillic(text: str) -> bool:
+    return CYRILLIC_RE.search(text) is not None
+
+
+def cyrillic_letter_share(text: str) -> float:
+    """Частка кирилиці серед авторської прози.
+
+    Латинські слова з великої літери — це зазвичай бренди (ChatGPT, Google),
+    тому вони не розбавляють українську. Код, URL і цитати маскуються:
+    англомовна цитата не робить український текст «неукраїнським».
+    """
+    cyrillic = len(CYRILLIC_RE.findall(text))
+    latin = sum(
+        len(token)
+        for token in LATIN_WORD_RE.findall(mask_segments(text))
+        if token[0].islower()
+    )
+    total = cyrillic + latin
+    return cyrillic / total if total else 0.0
 
 
 def language_share(text: str) -> float:
     """Доля українських ознак серед українських і російських.
 
-    1.0 — чиста українська, 0.0 — чиста російська. Спирається на службові
-    слова й літери, яких немає в іншій мові; спільні слова не рахуються.
+    1.0 — чиста українська, 0.0 — чиста російська. Текст без кирилиці
+    (англійська, польська, латиниця) — 0.0, а не 1.0: інакше мовний
+    страж пропускає будь-який неукраїнський текст як чистий.
     """
+    if not has_cyrillic(text):
+        return 0.0
     uk = 0
     ru = 0
     for match in STOPWORD_RE.finditer(text):
@@ -217,7 +285,11 @@ def language_share(text: str) -> float:
     return uk / (uk + ru)
 
 
-def is_ukrainian(text: str, threshold: float = 0.6) -> bool:
+def is_ukrainian(text: str, threshold: float = 0.8) -> bool:
+    if not has_cyrillic(text):
+        return False
+    if cyrillic_letter_share(text) < 0.5:
+        return False
     if count_words(text) < 5:
-        return True
+        return language_share(text) >= 0.5
     return language_share(text) >= threshold

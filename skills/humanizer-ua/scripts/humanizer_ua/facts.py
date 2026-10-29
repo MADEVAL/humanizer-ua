@@ -261,13 +261,18 @@ def extract_facts(text: str) -> Facts:
             continue
         lower = token.lower()
         facts.words.add(lower)
+        # «**Ціна:**» і «Причина:» — це підписи, а не власні назви.
+        # Інакше видалення болд-декору виглядає як втрата трьох фактів.
+        after = body[match.end() : match.end() + 1]
+        before = body[max(0, match.start() - 2) : match.start()]
+        label = after == ":" or before == "**"
         if lower in SOFT_NUMERALS:
             _add(facts, facts.soft, "кількість:" + lower, token)
         elif lower in HARD_NUMERALS:
             _add(facts, facts.hard, "число словами:" + lower, token)
         elif lower in CLAIM_WORDS:
             _add(facts, facts.claims, "квантор:" + lower, token)
-        elif lower not in CLAIM_WORDS and _is_name(token, match.start() in starts):
+        elif not label and lower not in CLAIM_WORDS and _is_name(token, match.start() in starts):
             _add(facts, facts.hard, "ім'я:" + lower, token)
 
     return facts
@@ -342,6 +347,10 @@ SOURCE_WORDS = (
 
 RANGE_RE = re.compile(r"\bвід\s+(\d+(?:[.,]\d+)?)\s+до\s+(\d+(?:[.,]\d+)?)", re.IGNORECASE)
 VAGUE_RE = re.compile(r"\b(?:понад|майже|близько|приблизно)\s+\d+(?:[.,]\d+)?\s*%?", re.IGNORECASE)
+# «Перший крок» — це порядок дій, а не рекорд. Такі порядкові не
+# вважаємо кванторами без джерела.
+ORDINAL_STEP_RE = re.compile(r"^\s*(?:крок|раз|пункт|етап|черга|дія|спроба|варіант)\b", re.IGNORECASE)
+ORDINAL_WORDS = {"перший", "перша", "перше", "перші", "другий", "друга", "друге", "другі"}
 
 
 def _sentence_around(text: str, position: int) -> str:
@@ -401,6 +410,8 @@ def ledger(text: str) -> dict:
             continue
         position = text.lower().find(display.lower())
         if position == -1:
+            continue
+        if display.lower() in ORDINAL_WORDS and ORDINAL_STEP_RE.match(text[position + len(display) :]):
             continue
         sentence = _sentence_around(text, position)
         if not _has_source(sentence):

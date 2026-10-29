@@ -116,7 +116,13 @@ def _english_words(masked: str, words: int, genre: str) -> float:
     """Частка англійських слів, які не є назвами продуктів чи термінами."""
     limit = 8.0 if genre in ("docs", "expert") else 3.0
     tokens = re.findall(r"\b[A-Za-z][A-Za-z-]{3,}\b", masked)
-    foreign = [token for token in tokens if token.lower() not in ENGLISH_ALLOWED]
+    # Велика літера на початку — це зазвичай бренд або власна назва
+    # (ChatGPT, Google, Claude), а не «засмічення» англійською.
+    foreign = [
+        token
+        for token in tokens
+        if token[0].islower() and token.lower() not in ENGLISH_ALLOWED
+    ]
     if not tokens or words < 50:
         return 0.0
     share = len(foreign) / max(words, 1) * 100
@@ -129,13 +135,15 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
     lengths = [count_words(sentence) for sentence in sentences(masked)]
 
     # Тире як стилістичний прийом. Самотнє тире — норма, дефіс замість
-    # тире ловить N01, а не ця метрика.
-    dash_count = len(re.findall(r"(?<=\s)[—–](?=\s)", masked))
-    dash_limit = max(1.0, words / 120)
-    if dash_count > dash_limit:
-        metrics.append(
-            _metric("dash", "Багато тире", dash_count, dash_limit, min(10, int(round((dash_count - dash_limit) * 3))), f"{dash_count} на {words} слів")
-        )
+    # тире ловить N01, а не ця метрика. У художньому тексті тире — це
+    # пунктуація діалогу, тому метрику не застосовуємо.
+    if genre != "fiction":
+        dash_count = len(re.findall(r"(?<=\s)[—–](?=\s)", masked))
+        dash_limit = max(2.0, words / 120)
+        if dash_count > dash_limit:
+            metrics.append(
+                _metric("dash", "Багато тире", dash_count, dash_limit, min(10, int(round((dash_count - dash_limit) * 3))), f"{dash_count} на {words} слів")
+            )
 
     # Болд
     bold_count = len(re.findall(r"\*\*[^*\n]{1,120}\*\*", raw))
@@ -172,11 +180,11 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
             max_run = max(max_run, run)
         else:
             run = 1
-    if max_run >= 3:
+    if max_run >= 3 and genre != "fiction":
         metrics.append(_metric("repeated_openings", "Однотипні початки", max_run, 2, 4, f"{max_run} речень підряд", "structure"))
 
     # Ритм: коефіцієнт варіації довжини речень
-    if len(lengths) >= 8:
+    if len(lengths) >= 8 and genre != "fiction":
         cv = _cv(lengths)
         if cv < 0.30:
             metrics.append(
@@ -185,7 +193,7 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
 
     # Ритм абзаців
     paragraphs = [p for p in re.split(r"\n\s*\n", masked) if count_words(p) >= 5]
-    if len(paragraphs) >= 4:
+    if len(paragraphs) >= 4 and genre != "fiction":
         para_cv = _cv([count_words(p) for p in paragraphs])
         if para_cv < 0.30:
             metrics.append(
@@ -194,28 +202,32 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
 
     # Рвана медитативність: ланцюг обірваних речень
     runs, longest = _staccato_runs(masked)
-    if runs:
+    if runs and genre != "fiction":
         metrics.append(
             _metric("staccato", "Ланцюг обірваних речень", runs, 0, min(12, runs * 4), f"найдовший {longest}")
         )
 
-    # Номіналізації
-    nominalizations = len(re.findall(r"\b[А-Яа-яІіЇїЄєҐґ]+(?:ння|ття|ість|ція|ання|ення|ування)\b", masked, flags=re.IGNORECASE))
-    per_100 = nominalizations / safe_words * 100
-    if per_100 > 8:
-        metrics.append(_metric("nominalization", "Нагромадження віддієслівних іменників", per_100, 8, 6, f"{per_100:.1f} на 100 слів"))
+    # Плотнісні метрики на короткому тексті — шум: три іменники на
+    # п'ятнадцять слів дають «20 на 100 слів». Документ обіцяє не
+    # застосовувати метрики до текстів коротших за 50 слів.
+    if words >= 50:
+        # Номіналізації
+        nominalizations = len(re.findall(r"\b[А-Яа-яІіЇїЄєҐґ]+(?:ння|ття|ість|ція|ання|ення|ування)\b", masked, flags=re.IGNORECASE))
+        per_100 = nominalizations / safe_words * 100
+        if per_100 > 8:
+            metrics.append(_metric("nominalization", "Нагромадження віддієслівних іменників", per_100, 8, 6, f"{per_100:.1f} на 100 слів"))
 
-    # Пасив
-    passive = len(re.findall(r"\b[А-Яа-яІіЇїЄєҐґ]+(?:ється|ються|вся|лася|лися|лося)\b", masked, flags=re.IGNORECASE))
-    passive_per_100 = passive / safe_words * 100
-    if passive_per_100 > 10 and genre not in {"academic", "legal", "news"}:
-        metrics.append(_metric("passive", "Пасив", passive_per_100, 10, 3, f"{passive_per_100:.1f} на 100 слів"))
+        # Пасив
+        passive = len(re.findall(r"\b[А-Яа-яІіЇїЄєҐґ]+(?:ється|ються|вся|лася|лися|лося)\b", masked, flags=re.IGNORECASE))
+        passive_per_100 = passive / safe_words * 100
+        if passive_per_100 > 10 and genre not in {"academic", "legal", "news"}:
+            metrics.append(_metric("passive", "Пасив", passive_per_100, 10, 3, f"{passive_per_100:.1f} на 100 слів"))
 
-    # «Який»
-    yakyi = len(re.findall(r"\bяк(?:ий|а|е|і|ого|ому|им|их)\b", masked, flags=re.IGNORECASE))
-    yakyi_per_100 = yakyi / safe_words * 100
-    if yakyi_per_100 > 4:
-        metrics.append(_metric("yakyi", "Ланцюги «який»", yakyi_per_100, 4, 4, f"{yakyi_per_100:.1f} на 100 слів"))
+        # «Який»
+        yakyi = len(re.findall(r"\bяк(?:ий|а|е|і|ого|ому|им|их)\b", masked, flags=re.IGNORECASE))
+        yakyi_per_100 = yakyi / safe_words * 100
+        if yakyi_per_100 > 4:
+            metrics.append(_metric("yakyi", "Ланцюги «який»", yakyi_per_100, 4, 4, f"{yakyi_per_100:.1f} на 100 слів"))
 
     # Горизонтальні лінії
     hrs = sum(1 for line in raw.splitlines() if line.strip() == "---")
@@ -228,10 +240,11 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
         metrics.append(_metric("english", "Багато англійських слів", english_share, 3.0, 3, ""))
 
     # Хеджування: лише нагромадження оговорок, не умови й модальність
-    hedge_count = count_hedges(masked)
-    hedge_density = hedge_count / safe_words * 1000
-    if hedge_count >= 3 and hedge_density > 4:
-        metrics.append(_metric("hedges", "Нагромадження оговорок", round(hedge_density, 1), 4, 4, f"{hedge_count} оговорок"))
+    if words >= 50:
+        hedge_count = count_hedges(masked)
+        hedge_density = hedge_count / safe_words * 1000
+        if hedge_count >= 3 and hedge_density > 4:
+            metrics.append(_metric("hedges", "Нагромадження оговорок", round(hedge_density, 1), 4, 4, f"{hedge_count} оговорок"))
 
     # Листикл
     lines = raw.splitlines()

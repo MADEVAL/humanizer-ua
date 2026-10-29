@@ -7,6 +7,7 @@ import json
 import re
 import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -136,6 +137,80 @@ class ScannerTests(unittest.TestCase):
         mixed = scan.build_report(russian, "marketing", None, allow_mixed=True)
         self.assertIn("LANG_MIXED", mixed["diagnostics"])
         self.assertIsNotNone(mixed["score"])
+
+    def test_language_guard_rejects_non_cyrillic(self) -> None:
+        for text in (
+            "This is a plain English text about product management.",
+            "To jest zwykły polski tekst o zarządzaniu produktem.",
+        ):
+            with self.subTest(text=text[:20]):
+                report = scan.build_report(text, "marketing", None)
+                self.assertIn("LANG_NOT_UK", report["diagnostics"])
+                self.assertIsNone(report["score"])
+                mixed = scan.build_report(text, "marketing", None, allow_mixed=True)
+                self.assertIn("LANG_NOT_UK", mixed["diagnostics"])
+
+    def test_mostly_latin_text_is_not_ukrainian(self) -> None:
+        text = "Це English text with many English words and only two Ukrainian words."
+        report = scan.build_report(text, "marketing", None)
+        self.assertIn("LANG_NOT_UK", report["diagnostics"])
+
+        brands = "OpenAI і ChatGPT працюють разом у браузері."
+        self.assertNotIn("LANG_NOT_UK", scan.build_report(brands, "marketing", None)["diagnostics"])
+
+    def test_empty_text_has_no_score(self) -> None:
+        for text in ("", "   \n\n\t "):
+            with self.subTest(text=repr(text)):
+                report = scan.build_report(text, "marketing", None)
+                self.assertIn("TEXT_EMPTY", report["diagnostics"])
+                self.assertIsNone(report["score"])
+
+    def test_crlf_frontmatter_is_masked(self) -> None:
+        text = (
+            '---\r\nname: test\r\ndescription: "Текст з лапками"\r\n---\r\n\r\n'
+            "Це звичайний український текст. Він має опис у метаданих і не повинен "
+            "рахувати лапки з frontmatter як помилку.\r\n"
+        )
+        report = scan.build_report(text, "marketing", None)
+        self.assertNotIn("N03", {item["id"] for item in report["norm"]})
+
+    def test_utf16_file_is_read(self) -> None:
+        from humanizer_ua.text import read_text
+
+        text = "Це український текст у кодуванні UTF-16. Він має достатньо слів для перевірки."
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "utf16.txt"
+            path.write_bytes(text.encode("utf-16"))
+            self.assertEqual(read_text(str(path)), text)
+
+    def test_scan_gate_json_is_valid(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "clean.txt"
+            path.write_text("Це звичайний український текст без маркерів і без помилок.", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(HERE / "scan_gate.py"), str(path), "--json"],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(result.returncode, 0, result.stderr)
+            payload = json.loads(result.stdout)
+            self.assertTrue(payload["ok"])
+            self.assertEqual(payload["files"][0]["score"], 100)
+
+    def test_scan_gate_does_not_crash_on_unscored_file(self) -> None:
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / "english.txt"
+            path.write_text("This is English text and it has no Ukrainian words at all.", encoding="utf-8")
+            result = subprocess.run(
+                [sys.executable, str(HERE / "scan_gate.py"), str(path)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+            )
+            self.assertEqual(result.returncode, 1)
+            self.assertNotIn("Traceback", result.stderr)
+            self.assertIn("—", result.stdout)
 
     def test_scores_are_layers(self) -> None:
         report = scan.build_report(AI_TEXT, "marketing", None)

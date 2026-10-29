@@ -8,7 +8,7 @@ import sys
 
 from .rules import GENRES
 from .score import build_report, format_report
-from .text import read_text
+from .text import ENCODINGS, read_text
 from .version import VERSION
 
 
@@ -25,16 +25,19 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument("--quiet", action="store_true", help="лише число")
     parser.add_argument("--verbose", action="store_true", help="повний список знахідок із цитатами")
     parser.add_argument("--allow-mixed", action="store_true", help="аналізувати змішаний текст із поміткою")
-    parser.add_argument("--encoding", choices=("auto", "utf-8", "utf-8-sig", "cp1251"), default="auto", help="кодування файлу")
+    parser.add_argument("--encoding", choices=ENCODINGS, default="auto", help="кодування файлу")
     parser.add_argument("--version", action="version", version=f"humanizer-ua {VERSION}")
     return parser.parse_args(argv)
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parse_args(argv if argv is not None else sys.argv[1:])
+    # Спочатку UTF-8, потім argparse: інакше повідомлення про помилку
+    # на Windows-консолі перетворюється на «�������».
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
 
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
+    args = parse_args(argv if argv is not None else sys.argv[1:])
 
     try:
         text = read_text(args.path, args.encoding)

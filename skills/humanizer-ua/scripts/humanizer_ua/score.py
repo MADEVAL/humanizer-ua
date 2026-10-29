@@ -8,7 +8,16 @@ from .markers import apply_weak_gating, collect, penalty_for
 from .metrics import collect_metrics
 from .norm import NORM_RULES
 from .rules import HARD_BANS, MARKERS
-from .text import count_words, is_ukrainian, language_share, mask_code_only, mask_segments, mask_tables
+from .text import (
+    count_words,
+    has_cyrillic,
+    is_ukrainian,
+    language_share,
+    mask_code_only,
+    mask_segments,
+    mask_tables,
+    normalise_newlines,
+)
 
 SCHEMA = "humanizer-ua/report/2"
 
@@ -22,14 +31,69 @@ GROUPS = (
 )
 
 
+def _empty_report(genre: str) -> dict:
+    return {
+        "schema": SCHEMA,
+        "score": None,
+        "band": "немає тексту",
+        "genre": genre,
+        "lang": "unknown",
+        "lang_share": 0.0,
+        "words": 0,
+        "scores": {
+            "cleanliness": None,
+            "norm": 100.0,
+            "style": 100.0,
+            "structure": 100.0,
+            "fact_risk": 0,
+        },
+        "counts": {
+            "hard_bans": 0,
+            "norm_rules": 0,
+            "norm": 0,
+            "markers": 0,
+            "marker_hits": 0,
+            "metrics": 0,
+            "weak_alone": 0,
+            "fact_lock": 0,
+            "errors": 0,
+            "warnings": 0,
+            "info": 0,
+            "style": 0,
+            "structure": 0,
+        },
+        "penalties": {"hard_bans": 0, "norm": 0, "markers": 0, "metrics": 0, "fact_lock": 0},
+        "hard_bans": [],
+        "norm": [],
+        "markers": [],
+        "metrics": [],
+        "findings": [],
+        "fact_lock": None,
+        "facts": ledger(""),
+        "diagnostics": ["TEXT_EMPTY"],
+        "notes": [],
+    }
+
+
 def build_report(text: str, genre: str, before: str | None = None, allow_mixed: bool = False) -> dict:
+    text = normalise_newlines(text)
+    if before is not None:
+        before = normalise_newlines(before)
+
     masked = mask_segments(text)
     code_masked = mask_tables(mask_code_only(text))
-    words = count_words(masked)
-    share = language_share(text) if words >= 5 else 1.0
+    # Цитати — це слова автора: вони не редагуються, але в знаменнику
+    # щільності мають рахуватися. Тому рахуємо на code_masked, не на masked.
+    words = count_words(code_masked)
+    if not text.strip() or words == 0:
+        return _empty_report(genre)
+
+    share = language_share(text)
     diagnostics: list[str] = []
 
-    if not allow_mixed and not is_ukrainian(text):
+    if not has_cyrillic(text):
+        diagnostics.append("LANG_NOT_UK")
+    elif not allow_mixed and not is_ukrainian(text):
         diagnostics.append("LANG_NOT_UK")
     elif allow_mixed and share < 0.8:
         diagnostics.append("LANG_MIXED")
@@ -53,6 +117,18 @@ def build_report(text: str, genre: str, before: str | None = None, allow_mixed: 
     has_errors = any(item["severity"] == "error" and item["penalty"] > 0.5 for item in rules)
     cleanliness = None if "LANG_NOT_UK" in diagnostics else scoring.composite(scores, genre)
     label = "немає оцінки" if cleanliness is None else scoring.band(cleanliness, scores, genre, has_errors)
+
+    # Факт-ризик без оригіналу теж має сенс: реєстр показує неперевірені
+    # числа, квантифікатори й діапазони. Квантор важить менше за
+    # псевдоточність: «перший крок» — не те саме, що «понад 40 %».
+    risk_points = sum(
+        3 if risk.get("kind") in {"псевдоточність без джерела", "діапазон навпаки"} else 1
+        for risk in facts.get("risks", [])
+    )
+    ledger_penalty = min(40, risk_points)
+    # З оригіналом міряємо саме зміни факт-замком; реєстр потрібен лише
+    # тоді, коли порівнювати нема з чим.
+    risk_penalty = lock["penalty"] if lock else ledger_penalty
 
     penalties = {
         "hard_bans": penalty_for([item for item in rules if item["id"].startswith("HB")]),
@@ -92,7 +168,7 @@ def build_report(text: str, genre: str, before: str | None = None, allow_mixed: 
             "norm": scores["norm"],
             "style": scores["style"],
             "structure": scores["structure"],
-            "fact_risk": scoring.fact_risk(lock["penalty"]) if lock else 0,
+            "fact_risk": scoring.fact_risk(risk_penalty),
         },
         "counts": {
             "hard_bans": len(hard),
@@ -130,20 +206,41 @@ def _lines(value: list[int]) -> str:
     return "рядки " + ", ".join(str(item) for item in value)
 
 
+def _plural(number: int, one: str, few: str, many: str) -> str:
+    """Українська форма множини для числа в звіті."""
+    number = abs(number)
+    if number % 10 == 1 and number % 100 != 11:
+        return one
+    if 2 <= number % 10 <= 4 and not 12 <= number % 100 <= 14:
+        return few
+    return many
+
+
 def _summary_lines(report: dict) -> list[str]:
     scores = report["scores"]
     counts = report["counts"]
+    lock = report.get("fact_lock")
+    if lock:
+        risks = sum(
+            len(lock.get(key, []))
+            for key in ("lost", "added", "soft_added", "claims_added")
+        )
+    else:
+        risks = len(report["facts"].get("risks", []))
     return [
-        f"  норма:      {scores['norm']:>5.0f}/100   ({counts['norm']} помилок)",
-        f"  стиль:      {scores['style']:>5.0f}/100   ({counts['style']} зауважень)",
-        f"  структура:  {scores['structure']:>5.0f}/100   ({counts['structure']} зауважень)",
-        f"  факт-ризик: {scores['fact_risk']:>5}/100   ({len(report['facts'].get('risks', []))} пунктів на перевірку)",
+        f"  норма:      {scores['norm']:>5.0f}/100   ({counts['norm']} {_plural(counts['norm'], 'помилка', 'помилки', 'помилок')})",
+        f"  стиль:      {scores['style']:>5.0f}/100   ({counts['style']} {_plural(counts['style'], 'зауваження', 'зауваження', 'зауважень')})",
+        f"  структура:  {scores['structure']:>5.0f}/100   ({counts['structure']} {_plural(counts['structure'], 'зауваження', 'зауваження', 'зауважень')})",
+        f"  факт-ризик: {scores['fact_risk']:>5}/100   ({risks} {_plural(risks, 'пункт', 'пункти', 'пунктів')} на перевірку)",
     ]
 
 
 def format_report(report: dict, quiet: bool = False, verbose: bool = False) -> str:
     if quiet:
         return "—" if report["score"] is None else str(report["score"])
+
+    if "TEXT_EMPTY" in report["diagnostics"]:
+        return "ПОРОЖНІЙ ТЕКСТ: немає що сканувати.\n  Бал не рахується."
 
     if "LANG_NOT_UK" in report["diagnostics"]:
         return (

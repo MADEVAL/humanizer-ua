@@ -138,7 +138,7 @@ python3 skills/humanizer-ua/scripts/scan.py стаття.txt --min-score 60
 | `export_rules.py` | JSON-експорт правил для інтеграцій і веб-демо |
 | `self_scan.py` | Власна проза скіла не містить жорстких заборон |
 | `bump_version.py 1.3.0` | Синхронна версія в усіх маніфестах і CHANGELOG |
-| `test_rules.py` | Кожне з 51 правила має позитивний приклад |
+| `test_rules.py` | Кожне з 63 правил має позитивний приклад |
 | `test_scan.py` | Сканер, CLI, факт-замок і метрики |
 | `eval/run_triggers.py` | Опис скіла не втратив тригери й винятки |
 
@@ -207,8 +207,8 @@ Humanizer-Ukraine/
 │     ├─ build_release_zip.py  # ZIP для Claude.ai
 │     ├─ export_rules.py       # JSON для інтеграцій
 │     ├─ bump_version.py       # синхронна версія
-│     ├─ test_scan.py          # 20 тестів CLI/фактів/шкал
-│     └─ test_rules.py         # 21 тест: покриття й калібрування
+│     ├─ test_scan.py          # 27 тестів CLI/фактів/шкал
+│     └─ test_rules.py         # 30 тестів: покриття й калібрування
 ├─ eval/
 │  ├─ corpus/ai/               # тексти з маркерами
 │  ├─ corpus/human/            # природні тексти

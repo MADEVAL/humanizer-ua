@@ -76,7 +76,7 @@ POSITIVE_MARKERS = {
     "D9": "## Часті запитання",
     "D10": "## Що це?\n\n## Навіщо?\n\n## Кому?",
     "E1": "Гарне питання! Ось огляд.",
-    "E2": "Станом на 2025 рік це працює.",
+    "E2": "Схоже, що це працює.",
     "E4": "Ця стаття розповідає про це.",
     "E5": "Примітка для редакції: перевірити.",
     "F10": "Усі знають, що це працює.",
@@ -257,6 +257,59 @@ class CalibrationTests(unittest.TestCase):
         self.assertTrue(report_here["facts"]["entities"])
         kinds = {risk["kind"] for risk in report_here["facts"]["risks"]}
         self.assertIn("псевдоточність без джерела", kinds)
+
+    def test_fact_risk_counts_ledger_risks_without_before(self) -> None:
+        report_here = report("Понад 40 % команд обрали це. Це найбільший показник.")
+        self.assertGreater(len(report_here["facts"]["risks"]), 0)
+        self.assertGreater(report_here["scores"]["fact_risk"], 0)
+
+    def test_bold_labels_are_not_lost_names(self) -> None:
+        before = "**Головне:** продукт працює. **Ціна:** доступна."
+        after = "Продукт працює. Ціна доступна."
+        report_here = build_report(after, "marketing", before)
+        self.assertEqual(report_here["fact_lock"]["lost"], [])
+
+    def test_ordinary_business_phrases_are_not_errors(self) -> None:
+        text = (
+            "Станом на 1 жовтня 2026 року ми маємо 12 клієнтів. "
+            "Дайте знати, якщо потрібні уточнення. "
+            "Дякуючи за допомогу, ми завершили проєкт. "
+            "Мені здається, що це правильне рішення. "
+            "Це була остання крапка. Прийшов в офіс. "
+            "Прапор синьо-жовтий. Він володіє англійською мовою."
+        )
+        report_here = report(text, "business")
+        error_ids = {
+            item["id"]
+            for item in report_here["hard_bans"] + report_here["norm"]
+            if item["severity"] == "error"
+        }
+        self.assertEqual(error_ids, set())
+        flagged = {item["id"] for item in report_here["findings"]}
+        self.assertNotIn("E2", flagged)
+        self.assertNotIn("D8", flagged)
+        self.assertNotIn("G1", flagged)
+        self.assertNotIn("C12", flagged)
+
+    def test_english_curly_quotes_are_not_a_norm_error(self) -> None:
+        self.assertIsNone(finding("Він сказав “yes” і пішов.", "N03"))
+        self.assertIsNotNone(finding("Він сказав “текст” і пішов.", "N03"))
+
+    def test_zvisno_is_only_a_wrapper_when_standalone(self) -> None:
+        self.assertIsNone(finding("Звісно, це нормальне пояснення.", "E1"))
+        self.assertIsNotNone(finding("Звісно!", "E1"))
+
+    def test_short_text_skips_density_metrics(self) -> None:
+        report_here = report("Це коротке оновлення. Оновлення стосується розвитку. Розвиток триває.")
+        metric_ids = {item["id"] for item in report_here["metrics"]}
+        self.assertNotIn("nominalization", metric_ids)
+
+    def test_fiction_dialogue_is_not_decoration(self) -> None:
+        text = "Вона всміхнулася. 😊\n\n— Ти прийшла, — сказав він. — Я чекав."
+        metric_ids = {item["id"] for item in report(text, "fiction")["metrics"]}
+        self.assertNotIn("emoji", metric_ids)
+        self.assertNotIn("dash", metric_ids)
+        self.assertNotIn("staccato", metric_ids)
 
 
 if __name__ == "__main__":

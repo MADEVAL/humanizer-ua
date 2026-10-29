@@ -53,6 +53,9 @@ def main() -> int:
         report = build_report(prose_only(path.read_text(encoding="utf-8")), "marketing", None)
         for item in report["hard_bans"]:
             failures.append(f"{path.name}: {item['id']} «{item['label']}» ({item['count']})")
+        for item in report["norm"]:
+            if item["severity"] == "error":
+                failures.append(f"{path.name}: {item['id']} «{item['label']}» ({item['count']})")
 
     if failures:
         print(f"RESULT: FAIL self-scan ({len(failures)})")
