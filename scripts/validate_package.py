@@ -50,6 +50,9 @@ REQUIRED = [
     "scripts/humanizer_ua/markers.py",
     "scripts/humanizer_ua/metrics.py",
     "scripts/humanizer_ua/rules.py",
+    "scripts/humanizer_ua/scoring.py",
+    "scripts/humanizer_ua/context.py",
+    "scripts/humanizer_ua/norm.py",
     "scripts/humanizer_ua/score.py",
     "scripts/humanizer_ua/text.py",
     "scripts/humanizer_ua/version.py",
@@ -200,12 +203,12 @@ def check_catalog() -> None:
             fail("catalog", f"група {letter}: номери {numbers}")
             return
 
-    if len(entries) != 63:
-        fail("catalog", f"{len(entries)} маркерів, очікується 63")
+    if len(entries) != 80:
+        fail("catalog", f"{len(entries)} маркерів, очікується 80")
         return
 
-    if "63 маркери" not in catalog:
-        fail("catalog", "у вступі немає «63 маркери»")
+    if "80 маркерів" not in catalog:
+        fail("catalog", "у вступі немає «80 маркерів»")
         return
 
     ok(f"catalog ({len(entries)} маркерів)")

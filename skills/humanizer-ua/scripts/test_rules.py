@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
-"""Повний набір прикладів для кожного правила сканера."""
+"""Приклади для кожного правила й перевірка калібрування."""
 
 from __future__ import annotations
 
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -10,6 +11,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
+from humanizer_ua.norm import NORM_RULES  # noqa: E402
 from humanizer_ua.rules import HARD_BANS, MARKERS  # noqa: E402
 from humanizer_ua.score import build_report  # noqa: E402
 
@@ -26,7 +28,7 @@ POSITIVE_HARD = {
     "HB10": "У рамках проєкту це працює.",
     "HB11": "З метою покращення це робимо.",
     "HB12": "Таким чином, це працює.",
-    "HB13": "Це не просто оновлення.",
+    "HB13": "Це не просто оновлення, а новий етап.",
     "HB14": "Це не проблема. Це можливість.",
     "HB15": "Давайте розберемося.",
     "HB16": "Це дійсно працює.",
@@ -52,28 +54,65 @@ POSITIVE_MARKERS = {
     "A6": "Хтось скаже, що це складно.",
     "A7": "Чому? Бо це працює.",
     "A8": "Підсумую: це працює.",
-    "B3": "Це інструмент, який допомагає команді, яка працює віддалено.",
+    "A9": "У цій статті ми розглянемо, як працює кеш.",
+    "A10": "Підсумовуючи, це працює.",
+    "A11": "Це найкращий вибір для стартапів.",
+    "B3": "Це інструмент, який допомагає команді, яка працює віддалено, яка потребує звітів.",
     "B6": "Існуючі проблеми треба вирішувати.",
     "B11": "Це працює, підкреслюючи важливість.",
+    "B12": "Він працює, забезпечуючи стійкість.",
+    "B13": "Процес забезпечення реалізації оптимізації.",
+    "B14": "Це робить транзакції безклопітними.",
     "C1": "Ми відносимося до цього серйозно.",
     "C2": "Отримали фідбек від команди.",
     "C5": "Це виводить на новий рівень.",
     "C9": "Можливо, ймовірно, це працює.",
     "C11": "Це пов'язано з керівництвом.",
     "C12": "Галерея служить як простір.",
+    "C13": "Вона пропонує зручний досвід.",
+    "C14": "Це є ключем до успіху.",
+    "C17": "Понад 90 % компаній обирають це.",
     "D8": "Це високо-якісний продукт.",
+    "D9": "## Часті запитання",
+    "D10": "## Що це?\n\n## Навіщо?\n\n## Кому?",
     "E1": "Гарне питання! Ось огляд.",
     "E2": "Станом на 2025 рік це працює.",
     "E4": "Ця стаття розповідає про це.",
     "E5": "Примітка для редакції: перевірити.",
+    "F10": "Усі знають, що це працює.",
     "G1": "Вона і він прийшли.",
     "G5": "Було прийнято рішення.",
 }
 
+POSITIVE_NORM = {
+    "N01": "Це - помилка.",
+    "N02": "Тут з\\’єднання і пов\\’язані.",
+    "N03": 'Він сказав "проєкт" і пішов.',
+    "N04": "Слово , далі текст.",
+    "N05": "Два  пробіли в реченні.",
+    "N06": "Зростання 5% за рік.",
+    "N07": "Це тривало 10-20 років.",
+    "N08": "Текст\u00a0 .",
+    "N13": "Це проэкт із ёлкою.",
+    "N14": "Сайт працює, сайт росте.",
+    "N15": "Він відкрив WоrdPress.",
+}
 
-def found_ids(text: str, genre: str = "marketing") -> set[str]:
+
+def ids(text: str, genre: str = "marketing") -> set[str]:
     report = build_report(text, genre, None)
-    return {item["id"] for item in report["hard_bans"] + report["markers"]}
+    return {item["id"] for item in report["hard_bans"] + report["markers"] + report["norm"]}
+
+
+def report(text: str, genre: str = "marketing") -> dict:
+    return build_report(text, genre, None)
+
+
+def finding(text: str, rule_id: str) -> dict | None:
+    for item in report(text)["findings"]:
+        if item.get("rule_id") == rule_id:
+            return item
+    return None
 
 
 class RuleCoverageTests(unittest.TestCase):
@@ -83,15 +122,29 @@ class RuleCoverageTests(unittest.TestCase):
     def test_every_marker_has_example(self) -> None:
         self.assertEqual(set(POSITIVE_MARKERS), {rule["id"] for rule in MARKERS})
 
+    def test_every_norm_rule_has_example(self) -> None:
+        self.assertEqual(set(POSITIVE_NORM), {rule["id"] for rule in NORM_RULES})
+
+    def test_norm_ids_exist_in_hard_bans(self) -> None:
+        docs = (HERE.parent / "references" / "hard-bans.md").read_text(encoding="utf-8")
+        for rule in NORM_RULES:
+            with self.subTest(rule=rule["id"]):
+                self.assertIn(f"**{rule['id']}**", docs)
+
     def test_all_hard_bans_match(self) -> None:
         for rule_id, text in POSITIVE_HARD.items():
             with self.subTest(rule=rule_id):
-                self.assertIn(rule_id, found_ids(text))
+                self.assertIn(rule_id, ids(text))
 
     def test_all_markers_match(self) -> None:
         for rule_id, text in POSITIVE_MARKERS.items():
             with self.subTest(rule=rule_id):
-                self.assertIn(rule_id, found_ids(text))
+                self.assertIn(rule_id, ids(text))
+
+    def test_all_norm_rules_match(self) -> None:
+        for rule_id, text in POSITIVE_NORM.items():
+            with self.subTest(rule=rule_id):
+                self.assertIn(rule_id, ids(text))
 
     def test_correct_phrases_are_not_flagged(self) -> None:
         text = (
@@ -100,27 +153,29 @@ class RuleCoverageTests(unittest.TestCase):
             "У статті розглядається термін «являється». "
             "`У сучасному світі` — це код."
         )
-        self.assertEqual(found_ids(text), set())
+        self.assertEqual(ids(text), set())
 
     def test_genre_exemptions(self) -> None:
         cases = [
             ("Даний закон регулює відносини.", "academic", "HB04"),
-            ("Це не просто оновлення, це новий етап.", "fiction", "HB13"),
+            ("Це не просто оновлення, а новий етап.", "fiction", "HB13"),
             ("Це пов'язано з керівництвом.", "legal", "C11"),
             ("Це високо-якісний продукт.", "docs", "D8"),
             ("Вона і він прийшли.", "docs", "G1"),
+            ("У цій статті ми розглянемо метод.", "academic", "A9"),
         ]
         for text, genre, rule_id in cases:
             with self.subTest(rule=rule_id, genre=genre):
-                self.assertNotIn(rule_id, found_ids(text, genre))
+                self.assertNotIn(rule_id, ids(text, genre))
 
     def test_weak_signal_needs_company(self) -> None:
-        alone = build_report("Це дійсно працює.", "marketing", None)
+        alone = report("Це дійсно працює.")
         self.assertEqual(alone["counts"]["weak_alone"], 1)
         self.assertEqual(alone["penalties"]["hard_bans"], 0)
 
-        company = build_report("У сучасному світі це дійсно працює.", "marketing", None)
-        self.assertGreater(company["penalties"]["hard_bans"], 0)
+        company = report("У сучасному світі це дійсно працює.")
+        self.assertGreater(company["scores"]["style"], 0)
+        self.assertLess(company["scores"]["style"], 100)
 
     def test_fact_claims_are_protected(self) -> None:
         before = "Це перший такий сервіс в Україні. Він може допомогти 40 % команд."
@@ -129,6 +184,79 @@ class RuleCoverageTests(unittest.TestCase):
         lost = " ".join(report["fact_lock"]["lost"])
         self.assertIn("перший", lost)
         self.assertIn("може", lost)
+
+
+class CalibrationTests(unittest.TestCase):
+    """Хибні спрацювання, які знайшов аудит, не мають повертатися."""
+
+    def test_contrast_without_second_part_is_not_flagged(self) -> None:
+        self.assertIsNone(finding("Це не просто оновлення. Далі — факти.", "HB13"))
+
+    def test_meaningful_contrast_costs_little(self) -> None:
+        item = finding(
+            "Ключ до швидкого проєкту лежить не лише в обладнанні, а й у тому, як платформа обробляє трафік.",
+            "HB13",
+        )
+        self.assertIsNotNone(item)
+        self.assertLessEqual(item["penalty"], 4)
+
+    def test_technical_term_is_not_penalized(self) -> None:
+        item = finding("ASN — це унікальний номер, що присвоюється кожній автономній системі.", "HB18")
+        self.assertTrue(item is None or item["penalty"] == 0)
+
+    def test_source_makes_quantity_legitimate(self) -> None:
+        item = finding("За даними Cloudflare, значна частина шкідливих запитів надходить з IP-адрес.", "HB17")
+        self.assertTrue(item is None or item["penalty"] < 3)
+
+    def test_product_heading_is_not_title_case(self) -> None:
+        text = "## Майстерність веброзробки: PHP, Laravel, WordPress, Magento, Bootstrap\n\nТекст."
+        ids_here = {item["id"] for item in report(text, "docs")["metrics"]}
+        self.assertNotIn("title_case", ids_here)
+
+    def test_tech_names_are_not_english_noise(self) -> None:
+        text = (
+            "WordPress, Cloudflare, API і CLI працюють разом. "
+            "Плагін ставить WordPress і Cloudflare в один ланцюг."
+        )
+        ids_here = {item["id"] for item in report(text)["metrics"]}
+        self.assertNotIn("english", ids_here)
+
+    def test_conditions_are_not_hedges(self) -> None:
+        text = (
+            "Якщо користувач може увійти, він часто бачить звіт. "
+            "Іноді це зазвичай працює, але не завжди."
+        )
+        ids_here = {item["id"] for item in report(text)["metrics"]}
+        self.assertNotIn("hedges", ids_here)
+
+    def test_one_rule_cannot_zero_the_text(self) -> None:
+        filler = " ".join(["Команда працює з даними щодня."] * 60)
+        text = filler + " Це не просто звіт, а сигнал. Ще один: це не просто факт, а вимір."
+        scores = report(text)["scores"]
+        self.assertGreater(scores["style"], 80)
+
+    def test_markdown_list_is_not_a_dash_error(self) -> None:
+        text = "- перший пункт\n- другий пункт\n\nДіапазон 10–20 років."
+        self.assertIsNone(finding(text, "N01"))
+
+    def test_determinism(self) -> None:
+        text = "У сучасному світі це не просто звіт, а сигнал. Слово  слово."
+        first = json.dumps(report(text), ensure_ascii=False, sort_keys=True)
+        second = json.dumps(report(text), ensure_ascii=False, sort_keys=True)
+        self.assertEqual(first, second)
+
+    def test_error_blocks_clean_band(self) -> None:
+        from humanizer_ua import scoring
+
+        perfect = {"norm": 100.0, "style": 100.0, "structure": 100.0}
+        self.assertEqual(scoring.band(95, perfect, "marketing", errors=False), "чисто")
+        self.assertEqual(scoring.band(95, perfect, "marketing", errors=True), "правка")
+
+    def test_fact_ledger_without_before(self) -> None:
+        report_here = report("Зростання понад 40 % за два роки. Це перший такий сервіс.")
+        self.assertTrue(report_here["facts"]["entities"])
+        kinds = {risk["kind"] for risk in report_here["facts"]["risks"]}
+        self.assertIn("псевдоточність без джерела", kinds)
 
 
 if __name__ == "__main__":

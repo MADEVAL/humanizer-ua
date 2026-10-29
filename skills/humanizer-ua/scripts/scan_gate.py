@@ -66,7 +66,8 @@ def main(argv: list[str] | None = None) -> int:
         text = read_text(str(path))
         report = build_report(text, args.genre, None)
         hard = report["counts"]["hard_bans"]
-        below = report["score"] < args.min_score
+        score = report["score"]
+        below = score is None or score < args.min_score
         hard_fail = args.fail_on_hard_ban and hard > 0
         status = "FAIL" if below or hard_fail else "OK"
         failed = failed or status == "FAIL"

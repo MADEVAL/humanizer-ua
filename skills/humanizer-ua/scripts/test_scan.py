@@ -93,38 +93,56 @@ class ScannerTests(unittest.TestCase):
     def test_typography_metrics(self) -> None:
         text = "Він сказав \"проєкт\" і пішов до об'єкта. Зростання 5%."
         report = scan.build_report(text, "marketing", None)
-        ids = {item["id"] for item in report["metrics"]}
-        self.assertIn("quotes", ids)
-        self.assertIn("ascii_apostrophe", ids)
-        self.assertIn("numbers", ids)
+        ids = {item["id"] for item in report["norm"]}
+        self.assertIn("N03", ids)
+        self.assertIn("N02", ids)
+        self.assertIn("N06", ids)
+        self.assertGreater(report["penalties"]["norm"], 0)
 
     def test_quoted_text_does_not_fake_space_before_punctuation(self) -> None:
         clean = "Він сказав «проєкт». Далі пішов."
         report = scan.build_report(clean, "marketing", None)
-        ids = {item["id"] for item in report["metrics"]}
-        self.assertNotIn("space_before_punct", ids)
+        ids = {item["id"] for item in report["norm"]}
+        self.assertNotIn("N04", ids)
 
         wrong = "Він сказав «проєкт» . Далі пішов."
         report = scan.build_report(wrong, "marketing", None)
-        ids = {item["id"] for item in report["metrics"]}
-        self.assertIn("space_before_punct", ids)
+        ids = {item["id"] for item in report["norm"]}
+        self.assertIn("N04", ids)
 
     def test_code_and_tables_do_not_fake_double_spaces(self) -> None:
         text = "Текст.\n\n|  A  |  B  |\n|---|---|\n|  1  |  2  |\n\n```\nkey  =  value\n```\n"
         report = scan.build_report(text, "docs", None)
-        ids = {item["id"] for item in report["metrics"]}
-        self.assertNotIn("double_spaces", ids)
+        ids = {item["id"] for item in report["norm"]}
+        self.assertNotIn("N05", ids)
 
         wrong = "Слово  слово."
         report = scan.build_report(wrong, "marketing", None)
-        ids = {item["id"] for item in report["metrics"]}
-        self.assertIn("double_spaces", ids)
+        ids = {item["id"] for item in report["norm"]}
+        self.assertIn("N05", ids)
 
     def test_russian_letters(self) -> None:
         report = scan.build_report("Це проэкт із ёлкою.", "marketing", None)
-        ids = {item["id"] for item in report["metrics"]}
-        self.assertIn("russian_letters", ids)
-        self.assertGreater(report["penalties"]["metrics"], 0)
+        ids = {item["id"] for item in report["norm"]}
+        self.assertIn("N13", ids)
+        self.assertGreater(report["penalties"]["norm"], 0)
+
+    def test_language_guard(self) -> None:
+        russian = "Этот текст написан по-русски. Что же делать с ним дальше? Ничего."
+        report = scan.build_report(russian, "marketing", None)
+        self.assertIn("LANG_NOT_UK", report["diagnostics"])
+        self.assertIsNone(report["score"])
+
+        mixed = scan.build_report(russian, "marketing", None, allow_mixed=True)
+        self.assertIn("LANG_MIXED", mixed["diagnostics"])
+        self.assertIsNotNone(mixed["score"])
+
+    def test_scores_are_layers(self) -> None:
+        report = scan.build_report(AI_TEXT, "marketing", None)
+        for key in ("norm", "style", "structure", "fact_risk", "cleanliness"):
+            self.assertIn(key, report["scores"])
+        self.assertEqual(report["scores"]["cleanliness"], report["score"])
+        self.assertLess(report["scores"]["style"], 50)
 
     def test_report_is_json_serialisable(self) -> None:
         report = scan.build_report(AI_TEXT, "marketing", AI_TEXT)

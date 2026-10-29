@@ -327,5 +327,99 @@ def facts_verdict(diff: FactsDiff) -> str:
     return f"зіставлено елементів: {diff.kept}; змін не знайдено"
 
 
+SOURCE_WORDS = (
+    "за даними",
+    "згідно",
+    "відповідно до",
+    "дослідження",
+    "звіт",
+    "вимір",
+    "статистик",
+    "опитуванн",
+    "джерело",
+    "за оцінкою",
+)
+
+RANGE_RE = re.compile(r"\bвід\s+(\d+(?:[.,]\d+)?)\s+до\s+(\d+(?:[.,]\d+)?)", re.IGNORECASE)
+VAGUE_RE = re.compile(r"\b(?:понад|майже|близько|приблизно)\s+\d+(?:[.,]\d+)?\s*%?", re.IGNORECASE)
+
+
+def _sentence_around(text: str, position: int) -> str:
+    left = max(text.rfind(mark, 0, position) for mark in (".", "!", "?", "\n"))
+    right_candidates = [index for index in (text.find(".", position), text.find("!", position), text.find("?", position), text.find("\n", position)) if index != -1]
+    right = min(right_candidates) if right_candidates else len(text)
+    return text[max(0, left + 1) : right]
+
+
+def _has_source(sentence: str) -> bool:
+    lowered = sentence.lower()
+    return any(word in lowered for word in SOURCE_WORDS)
+
+
+def ledger(text: str) -> dict:
+    """Реєстр фактів без оригіналу: що є й що варто перевірити.
+
+    Нічого не «перевіряє в інтернеті»: сумнівне позначає needs_review.
+    """
+    facts = extract_facts(text)
+    entities = []
+    for key in sorted(facts.hard):
+        kind, _, value = key.partition(":")
+        entities.append({"kind": kind, "value": facts.display.get(key, value)})
+    for key in sorted(facts.claims):
+        kind, _, value = key.partition(":")
+        entities.append({"kind": kind, "value": facts.display.get(key, value)})
+
+    risks = []
+
+    for match in RANGE_RE.finditer(text):
+        low = float(match.group(1).replace(",", "."))
+        high = float(match.group(2).replace(",", "."))
+        if low > high:
+            risks.append(
+                {
+                    "kind": "діапазон навпаки",
+                    "quote": match.group(0),
+                    "needs_review": True,
+                }
+            )
+
+    for match in VAGUE_RE.finditer(text):
+        sentence = _sentence_around(text, match.start())
+        if not _has_source(sentence):
+            risks.append(
+                {
+                    "kind": "псевдоточність без джерела",
+                    "quote": match.group(0),
+                    "needs_review": True,
+                }
+            )
+
+    for key in sorted(facts.claims):
+        display = facts.display.get(key, "")
+        if not display:
+            continue
+        position = text.lower().find(display.lower())
+        if position == -1:
+            continue
+        sentence = _sentence_around(text, position)
+        if not _has_source(sentence):
+            risks.append(
+                {
+                    "kind": "квантор без джерела",
+                    "quote": display,
+                    "needs_review": True,
+                }
+            )
+        if len(risks) >= 12:
+            break
+
+    return {
+        "entities": entities[:60],
+        "risks": risks[:12],
+        "note": "Реєстр лише показує елементи. Зв'язок числа з твердженням перевіряє людина.",
+    }
+
+
 def sentence_spans(text: str) -> list[str]:
     return sentences(text)

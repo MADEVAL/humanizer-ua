@@ -1,4 +1,9 @@
-"""Метрики ритму, структури й оформлення."""
+"""Метрики ритму, структури й оформлення.
+
+Метрика — це спостереження, а не привід. Вона не знає контексту, тому
+працює лише там, де контекст не потрібен: ритм, розмітка, повтор.
+Типографіку перевіряють правила шару N, а не метрики.
+"""
 
 from __future__ import annotations
 
@@ -9,8 +14,22 @@ import statistics
 from .rules import DECOR_EXEMPT, HEDGES
 from .text import EMOJI_RE, WORD_RE, count_words, sentences
 
+# Англійські слова, які не є «засміченням»: назви продуктів, технологій
+# і усталені терміни. Лічити їх як чужу лексику — хибне спрацювання.
+ENGLISH_ALLOWED = {
+    "wordpress", "woocommerce", "cloudflare", "nginx", "apache", "docker",
+    "kubernetes", "linux", "windows", "macos", "android", "ios", "github",
+    "gitlab", "redis", "memcached", "mysql", "postgresql", "postgres",
+    "laravel", "magento", "bootstrap", "javascript", "typescript", "python",
+    "php", "html", "css", "json", "yaml", "xml", "sql", "api", "cli", "sdk",
+    "http", "https", "dns", "asn", "url", "uri", "ssh", "ftp", "tcp", "udp",
+    "ssl", "tls", "cdn", "vpn", "cpu", "ram", "ssd", "hdd", "gpu", "ui",
+    "ux", "seo", "sem", "cms", "crm", "erp", "smtp", "imap", "jwt", "oauth",
+    "jsonl", "csv", "sarif", "markdown", "frontend", "backend", "devops",
+}
 
-def _metric(ident: str, label: str, value: float, limit: float, penalty: int, detail: str) -> dict:
+
+def _metric(ident: str, label: str, value: float, limit: float, penalty: int, detail: str, layer: str = "style") -> dict:
     return {
         "id": ident,
         "label": label,
@@ -18,6 +37,8 @@ def _metric(ident: str, label: str, value: float, limit: float, penalty: int, de
         "limit": round(limit, 2),
         "penalty": penalty,
         "detail": detail,
+        "layer": layer,
+        "kind": "metric",
     }
 
 
@@ -64,50 +85,78 @@ def _repeated_phrases(text: str, size: int = 4, limit: int = 3) -> list[str]:
     return [" ".join(phrase) for phrase in repeated[:limit]]
 
 
+def _title_case_headings(raw: str) -> int:
+    """Заголовки Title Case, де капіталізовані саме звичайні слова.
+
+    Заголовок із назв продуктів («PHP, Laravel, WordPress») не рахуємо:
+    там великі літери ставить бренд, а не шаблон.
+    """
+    flagged = 0
+    for line in raw.splitlines():
+        heading = re.match(r"^#{1,6}\s+(.+)$", line)
+        if not heading:
+            continue
+        title = heading.group(1).strip()
+        if title.isupper():
+            continue
+        words = [
+            word
+            for word in WORD_RE.findall(title)
+            if len(word) > 1 and not word.isascii() and not any(char.isdigit() for char in word)
+        ]
+        if len(words) < 3:
+            continue
+        capitalized = sum(1 for word in words if word[0].isupper())
+        if capitalized / len(words) >= 0.6:
+            flagged += 1
+    return flagged
+
+
+def _english_words(masked: str, words: int, genre: str) -> float:
+    """Частка англійських слів, які не є назвами продуктів чи термінами."""
+    limit = 8.0 if genre in ("docs", "expert") else 3.0
+    tokens = re.findall(r"\b[A-Za-z][A-Za-z-]{3,}\b", masked)
+    foreign = [token for token in tokens if token.lower() not in ENGLISH_ALLOWED]
+    if not tokens or words < 50:
+        return 0.0
+    share = len(foreign) / max(words, 1) * 100
+    return share if share > limit else 0.0
+
+
 def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]:
     metrics: list[dict] = []
     safe_words = max(words, 1)
     lengths = [count_words(sentence) for sentence in sentences(masked)]
 
-    # Тире
+    # Тире як стилістичний прийом. Самотнє тире — норма, дефіс замість
+    # тире ловить N01, а не ця метрика.
     dash_count = len(re.findall(r"(?<=\s)[—–](?=\s)", masked))
     dash_limit = max(1.0, words / 120)
     if dash_count > dash_limit:
         metrics.append(
-            _metric("dash", "Багато тире", dash_count, dash_limit, min(12, int(round((dash_count - dash_limit) * 3))), f"{dash_count} на {words} слів")
+            _metric("dash", "Багато тире", dash_count, dash_limit, min(10, int(round((dash_count - dash_limit) * 3))), f"{dash_count} на {words} слів")
         )
 
     # Болд
     bold_count = len(re.findall(r"\*\*[^*\n]{1,120}\*\*", raw))
     bold_limit = max(2.0, words / 500)
     if bold_count > bold_limit and genre not in DECOR_EXEMPT:
-        metrics.append(_metric("bold", "Болд-декор", bold_count, bold_limit, 4, f"{bold_count} виділень"))
+        metrics.append(_metric("bold", "Болд-декор", bold_count, bold_limit, 4, f"{bold_count} виділень", "structure"))
 
     # Емодзі
     emoji_count = len(EMOJI_RE.findall(raw))
     if emoji_count and genre not in DECOR_EXEMPT:
-        metrics.append(_metric("emoji", "Емодзі-декор", emoji_count, 0, min(8, emoji_count * 2), f"{emoji_count} емодзі"))
+        metrics.append(_metric("emoji", "Емодзі-декор", emoji_count, 0, min(8, emoji_count * 2), f"{emoji_count} емодзі", "structure"))
 
     # Заголовки Title Case
-    title_case = 0
-    for line in raw.splitlines():
-        heading = re.match(r"^#{1,6}\s+(.+)$", line)
-        if not heading:
-            continue
-        title = heading.group(1).strip()
-        heading_words = [w for w in WORD_RE.findall(title) if len(w) > 1]
-        if len(heading_words) < 3:
-            continue
-        capitalized = sum(1 for w in heading_words if w[0].isupper())
-        if capitalized / len(heading_words) >= 0.6 and not title.isupper():
-            title_case += 1
+    title_case = _title_case_headings(raw)
     if title_case and genre not in DECOR_EXEMPT:
-        metrics.append(_metric("title_case", "Title Case у заголовках", title_case, 0, 4, f"{title_case} заголовків"))
+        metrics.append(_metric("title_case", "Title Case у заголовках", title_case, 0, 4, f"{title_case} заголовків", "structure"))
 
     # Список із болд-лейблами
     bold_labels = len(re.findall(r"^\s*[-*]\s+\*\*[^*\n]+:\*\*", raw, flags=re.MULTILINE))
     if bold_labels >= 2 and genre not in DECOR_EXEMPT:
-        metrics.append(_metric("bold_labels", "Список із болд-лейблами", bold_labels, 1, 4, f"{bold_labels} пунктів"))
+        metrics.append(_metric("bold_labels", "Список із болд-лейблами", bold_labels, 1, 4, f"{bold_labels} пунктів", "structure"))
 
     # Однотипні початки
     starts = []
@@ -124,7 +173,7 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
         else:
             run = 1
     if max_run >= 3:
-        metrics.append(_metric("repeated_openings", "Однотипні початки", max_run, 2, 4, f"{max_run} речень підряд"))
+        metrics.append(_metric("repeated_openings", "Однотипні початки", max_run, 2, 4, f"{max_run} речень підряд", "structure"))
 
     # Ритм: коефіцієнт варіації довжини речень
     if len(lengths) >= 8:
@@ -140,7 +189,7 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
         para_cv = _cv([count_words(p) for p in paragraphs])
         if para_cv < 0.30:
             metrics.append(
-                _metric("paragraph_cv", "Рівні абзаци", para_cv, 0.30, 6, f"CV {para_cv:.2f}")
+                _metric("paragraph_cv", "Рівні абзаци", para_cv, 0.30, 6, f"CV {para_cv:.2f}", "structure")
             )
 
     # Рвана медитативність: ланцюг обірваних речень
@@ -168,64 +217,28 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
     if yakyi_per_100 > 4:
         metrics.append(_metric("yakyi", "Ланцюги «який»", yakyi_per_100, 4, 4, f"{yakyi_per_100:.1f} на 100 слів"))
 
-    # ASCII-апостроф
-    ascii_apostrophe = len(re.findall(r"[А-Яа-яІіЇїЄєҐґ]'[А-Яа-яІіЇїЄєҐґ]", raw))
-    if ascii_apostrophe:
-        metrics.append(_metric("ascii_apostrophe", "ASCII-апостроф", ascii_apostrophe, 0, 3, "заміни на ’"))
-
-    # Прямі й англійські лапки
-    bad_quotes = len(re.findall(r'"[^"\n]{1,120}"', raw)) + len(re.findall(r"“[^”]{1,120}”", raw))
-    if bad_quotes:
-        metrics.append(_metric("quotes", "Неукраїнські лапки", bad_quotes, 0, 3, "використовуй «»"))
-
-    # Формат чисел
-    bad_numbers = (
-        len(re.findall(r"\d%", raw))
-        + len(re.findall(r"\d(?:грн|кг|км|см|мм|гб|мб|тб)\b", raw, flags=re.IGNORECASE))
-        + len(re.findall(r"\d{4}р\.", raw))
-    )
-    if bad_numbers:
-        metrics.append(_metric("numbers", "Формат чисел", bad_numbers, 0, 3, "пробіл перед одиницею"))
-
-    # Російські літери
-    russian = len(re.findall(r"[ёыэъЁЫЭЪ]", raw))
-    if russian:
-        metrics.append(_metric("russian_letters", "Російські літери", russian, 0, 12, "виправ як орфографію"))
-
-    # Подвійні пробіли й пробіл перед пунктуацією
-    double_spaces = 0
-    for line in masked.splitlines():
-        if line[:1].isspace() or line.lstrip().startswith("|"):
-            continue
-        double_spaces += len(re.findall(r"\S  +\S", line))
-    if double_spaces:
-        metrics.append(_metric("double_spaces", "Подвійні пробіли", double_spaces, 0, 2, "один пробіл"))
-
-    space_before_punct = len(re.findall(r"\s+[,.;:!?](?=\s|$)", masked))
-    if space_before_punct:
-        metrics.append(_metric("space_before_punct", "Пробіл перед розділовим знаком", space_before_punct, 0, 2, ""))
-
     # Горизонтальні лінії
     hrs = sum(1 for line in raw.splitlines() if line.strip() == "---")
     if hrs > 2 and genre not in DECOR_EXEMPT:
-        metrics.append(_metric("hr", "Зайві розділювачі", hrs, 2, 3, f"{hrs} ліній"))
+        metrics.append(_metric("hr", "Зайві розділювачі", hrs, 2, 3, f"{hrs} ліній", "structure"))
 
-    # Англійські слова
-    english = len(re.findall(r"\b[A-Za-z]{4,}\b", masked))
-    if words >= 50 and english / safe_words > 0.03:
-        metrics.append(_metric("english", "Багато англійських слів", english / safe_words * 100, 3, 3, ""))
+    # Англійські слова: назви продуктів і терміни не рахуються
+    english_share = _english_words(masked, words, genre)
+    if english_share:
+        metrics.append(_metric("english", "Багато англійських слів", english_share, 3.0, 3, ""))
 
-    # Хеджування
+    # Хеджування: лише нагромадження оговорок, не умови й модальність
     hedge_count = count_hedges(masked)
-    if hedge_count >= 5:
-        metrics.append(_metric("hedges", "Нагромадження оговорок", hedge_count, 4, 4, f"{hedge_count} оговорок"))
+    hedge_density = hedge_count / safe_words * 1000
+    if hedge_count >= 3 and hedge_density > 4:
+        metrics.append(_metric("hedges", "Нагромадження оговорок", round(hedge_density, 1), 4, 4, f"{hedge_count} оговорок"))
 
     # Листикл
     lines = raw.splitlines()
     list_items = len([line for line in lines if re.match(r"^\s*(?:[-*+•]|\d{1,3}[.)])\s+\S", line)])
     non_empty = len([line for line in lines if line.strip()])
     if list_items >= 5 and non_empty and list_items / non_empty > 0.6:
-        metrics.append(_metric("listicle", "Список замість прози", list_items, 4, 4, f"{list_items} пунктів"))
+        metrics.append(_metric("listicle", "Список замість прози", list_items, 4, 4, f"{list_items} пунктів", "structure"))
 
     # Повтор фраз між абзацами: спостереження без штрафу
     phrases = _repeated_phrases(masked)

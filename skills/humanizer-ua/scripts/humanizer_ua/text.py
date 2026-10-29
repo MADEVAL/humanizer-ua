@@ -43,26 +43,69 @@ def _hide(match: re.Match[str]) -> str:
     Пробіли тут не годяться: вони створюють фальшивий «пробіл перед
     розділовим знаком» після цитати або inline-коду.
     """
-    return "".join("\n" if ch == "\n" else "\u200b" for ch in match.group(0))
+    return _hide_text(match.group(0))
+
+
+def _hide_text(text: str) -> str:
+    return "".join("\n" if ch == "\n" else "\u200b" for ch in text)
+
+
+PROTECTED_PATTERNS = (
+    r"\A---\n.*?\n---\n",
+    r"```.*?```",
+    r"~~~.*?~~~",
+    r"`[^`\n]*`",
+    r"https?://\S+",
+)
+
+QUOTE_PATTERNS = (
+    r"«[^»]*»",
+    r"„[^“]*“",
+    r"“[^”]*”",
+    r'"[^"\n]*"',
+)
 
 
 def mask_segments(text: str) -> str:
     """Маскує код, URL, цитати й YAML frontmatter."""
-    patterns = (
-        r"\A---\n.*?\n---\n",
-        r"```.*?```",
-        r"~~~.*?~~~",
-        r"`[^`\n]*`",
-        r"https?://\S+",
-        r"«[^»]*»",
-        r"„[^“]*“",
-        r"“[^”]*”",
-        r'"[^"\n]*"',
-    )
     masked = text
-    for pattern in patterns:
+    for pattern in PROTECTED_PATTERNS + QUOTE_PATTERNS:
         masked = re.sub(pattern, _hide, masked, flags=re.DOTALL)
     return masked
+
+
+def mask_code_only(text: str) -> str:
+    """Маскує код, URL і frontmatter, але лишає цитати.
+
+    Потрібно нормативному шару: лапки, апострофи й тире всередині цитат
+    теж треба бачити, інакше правило ніколи не спрацює.
+    """
+    masked = text
+    for pattern in PROTECTED_PATTERNS:
+        masked = re.sub(pattern, _hide, masked, flags=re.DOTALL)
+    return masked
+
+
+TECH_LINE_RE = re.compile(
+    r"^(?:<|Rewrite|\s*(?:sudo|apt|pip|npm|docker|git|curl|wget)\s)|"
+    r"%\{|->|=>|;\s*$|\};|<?php|\bIfModule\b|\bserver\s*\{|\blocation\s+/"
+)
+
+
+def mask_tables(text: str) -> str:
+    """Маскує рядки таблиць, коду з відступом і технічні рядки.
+
+    Це дані, а не проза: подвійні пробіли, дефіси й лапки там не помилка.
+    """
+    lines = []
+    for line in text.splitlines(keepends=True):
+        stripped = line.lstrip()
+        technical = bool(TECH_LINE_RE.search(stripped)) and len(stripped.split()) >= 3
+        if stripped.startswith("|") or line.startswith("    ") or technical:
+            lines.append(_hide_text(line))
+        else:
+            lines.append(line)
+    return "".join(lines)
 
 
 def count_words(text: str) -> int:
@@ -96,3 +139,85 @@ def paragraph_texts(text: str) -> list[str]:
 
 def normalise_apostrophes(text: str) -> str:
     return text.replace("’", "'").replace("ʼ", "'")
+
+
+def paragraph_spans(text: str) -> list[tuple[int, int]]:
+    """Повертає зміщення (початок, кінець) кожного абзацу."""
+    spans: list[tuple[int, int]] = []
+    position = 0
+    for match in re.finditer(r"\n[ \t]*\n", text):
+        if text[position : match.start()].strip():
+            spans.append((position, match.start()))
+        position = match.end()
+    if text[position:].strip():
+        spans.append((position, len(text)))
+    return spans
+
+
+def paragraph_at(text: str, position: int, spans: list[tuple[int, int]] | None = None) -> int:
+    """Індекс абзацу для зміщення."""
+    spans = spans if spans is not None else paragraph_spans(text)
+    for index, (start, end) in enumerate(spans):
+        if start <= position <= end:
+            return index
+    return max(0, len(spans) - 1)
+
+
+def sentence_bounds(text: str, position: int) -> tuple[int, int]:
+    """Межі речення навколо зміщення."""
+    start = 0
+    for match in re.finditer(r"(?<=[.!?…])\s+", text):
+        if match.end() <= position:
+            start = match.end()
+        else:
+            return start, match.start()
+    return start, len(text)
+
+
+# Українські та російські службові слова. Спільні для двох мов не беремо:
+# «не», «на», «з/с», «до», «для» нічого не розрізняють.
+UK_STOPWORDS = {
+    "і", "й", "та", "що", "це", "цей", "ця", "ці", "як", "який", "яка",
+    "які", "яке", "є", "бути", "буде", "щоб", "але", "або", "також",
+    "його", "її", "їх", "ми", "ви", "він", "вона", "вони", "після",
+    "через", "можна", "потрібно", "треба", "дуже", "ще", "вже", "коли",
+    "тому", "якщо", "лише", "тільки", "між", "під", "над", "при", "про",
+}
+RU_STOPWORDS = {
+    "и", "что", "это", "этот", "эта", "эти", "как", "который", "которая",
+    "которые", "есть", "будет", "чтобы", "но", "или", "также", "его",
+    "её", "их", "мы", "вы", "он", "она", "они", "после", "через", "можно",
+    "нужно", "надо", "очень", "ещё", "уже", "когда", "поэтому", "если",
+    "только", "между", "под", "над", "при", "про",
+}
+UK_LETTERS = set("іїєґІЇЄҐ")
+RU_LETTERS = set("ыэъёЫЭЪЁ")
+
+STOPWORD_RE = re.compile(r"[А-Яа-яЁёІіЇїЄєҐґ]+")
+
+
+def language_share(text: str) -> float:
+    """Доля українських ознак серед українських і російських.
+
+    1.0 — чиста українська, 0.0 — чиста російська. Спирається на службові
+    слова й літери, яких немає в іншій мові; спільні слова не рахуються.
+    """
+    uk = 0
+    ru = 0
+    for match in STOPWORD_RE.finditer(text):
+        token = match.group(0).lower()
+        if token in UK_STOPWORDS:
+            uk += 1
+        elif token in RU_STOPWORDS:
+            ru += 1
+        uk += sum(1 for char in token if char in UK_LETTERS) * 0.5
+        ru += sum(1 for char in token if char in RU_LETTERS) * 0.5
+    if uk + ru == 0:
+        return 1.0
+    return uk / (uk + ru)
+
+
+def is_ukrainian(text: str, threshold: float = 0.6) -> bool:
+    if count_words(text) < 5:
+        return True
+    return language_share(text) >= threshold

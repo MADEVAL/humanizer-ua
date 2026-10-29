@@ -110,10 +110,10 @@ def check_catalog() -> None:
         numbers = groups.get(letter, [])
         if numbers != list(range(1, len(numbers) + 1)):
             fail(f"каталог, група {letter}: номери {numbers}")
-    if len(entries) != 63:
-        fail(f"каталог: {len(entries)} маркерів, очікується 63")
-    if "63 маркери" not in catalog:
-        fail("каталог: у вступі немає «63 маркери»")
+    if len(entries) != 80:
+        fail(f"каталог: {len(entries)} маркерів, очікується 80")
+    if "80 маркерів" not in catalog:
+        fail("каталог: у вступі немає «80 маркерів»")
 
 
 def check_hard_bans() -> None:

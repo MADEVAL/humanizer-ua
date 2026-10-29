@@ -12,6 +12,7 @@ SKILL = Path(__file__).resolve().parent.parent
 ROOT = SKILL.parent.parent
 sys.path.insert(0, str(SKILL / "scripts"))
 
+from humanizer_ua.norm import NORM_RULES  # noqa: E402
 from humanizer_ua.rules import GENRES, HARD_BANS, MARKERS, WEAK_IDS  # noqa: E402
 from humanizer_ua.version import VERSION  # noqa: E402
 
@@ -31,12 +32,13 @@ def main(argv: list[str] | None = None) -> int:
         "genres": list(GENRES),
         "weak_ids": sorted(WEAK_IDS),
         "hard_bans": HARD_BANS,
+        "norm": NORM_RULES,
         "markers": MARKERS,
     }
     output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
     print(
         f"RESULT: PASS export-rules ({output}, "
-        f"{len(HARD_BANS)} заборон, {len(MARKERS)} маркерів)"
+        f"{len(HARD_BANS)} заборон, {len(NORM_RULES)} норм, {len(MARKERS)} маркерів)"
     )
     return 0
 
