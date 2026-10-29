@@ -62,7 +62,7 @@ CLAIM_RE = re.compile(
 )
 CLAIM_PHRASE_RE = re.compile(r"\bдо\s+цього\s+часу\b|\bу\s+світі\b|\bв\s+Україні\b|\bна\s+ринку\b", re.IGNORECASE)
 HEDGE_RE = re.compile(
-    r"\b(?:може|можуть|можливо|ймовірно|зазвичай|як\s+правило|часто|іноді|"
+    r"\b(?:може|можуть|можлив\w*|ймовірно|зазвичай|як\s+правило|часто|іноді|"
     r"приблизно|близько|майже|у\s+середньому|не\s+обов'язково|не\s+завжди|"
     r"ризик\w*|один\s+із|одна\s+з|лише|тільки|якщо|за\s+даними|"
     r"(?:від|до|понад|більше|менше|не\s+більше|не\s+менше)(?=\s+\d))\b",
@@ -245,7 +245,8 @@ def extract_facts(text: str) -> Facts:
 
     for match in HEDGE_RE.finditer(body):
         phrase = re.sub(r"\s+", " ", match.group(0).lower())
-        _add(facts, facts.hedges, "оговорка:" + phrase, phrase)
+        key = "може" if phrase.startswith("можлив") else phrase
+        _add(facts, facts.hedges, "оговорка:" + key, phrase)
     for match in CLAIM_RE.finditer(body):
         phrase = match.group(0).lower()
         _add(facts, facts.claims, "квантор:" + phrase, match.group(0))
