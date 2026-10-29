@@ -4,8 +4,10 @@ __pycache__/
 .venv/
 .pytest_cache/
 
-# Build and local artefacts
-dist/
+# Build and local artefacts. The JSON export is a shipped integration
+# artifact, so it stays tracked while the rest of dist/ is ignored.
+dist/*
+!dist/rules-ua.json
 build/
 *.zip
 .DS_Store

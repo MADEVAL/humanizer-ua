@@ -134,9 +134,47 @@ class ScannerTests(unittest.TestCase):
         self.assertIn("LANG_NOT_UK", report["diagnostics"])
         self.assertIsNone(report["score"])
 
-        mixed = scan.build_report(russian, "marketing", None, allow_mixed=True)
+        # «Змішаний» — це суржик, а не чужа мова. Чистий російський текст
+        # не проходить навіть із --allow-mixed.
+        foreign = scan.build_report(russian, "marketing", None, allow_mixed=True)
+        self.assertIn("LANG_NOT_UK", foreign["diagnostics"])
+        self.assertIsNone(foreign["score"])
+
+        mixed = scan.build_report(
+            "Ми приймаємо участь у проєкті. Что це дає команді? Это важно для роботи.",
+            "marketing",
+            None,
+            allow_mixed=True,
+        )
         self.assertIn("LANG_MIXED", mixed["diagnostics"])
         self.assertIsNotNone(mixed["score"])
+
+    def test_mixed_mode_rejects_russian_without_special_letters(self) -> None:
+        text = "Он пришел в офис и сказал, что работа готова. Команда обсудила план."
+        report = scan.build_report(text, "marketing", None, allow_mixed=True)
+        self.assertIn("LANG_NOT_UK", report["diagnostics"])
+        self.assertIsNone(report["score"])
+
+    def test_error_blocks_clean_on_long_text(self) -> None:
+        text = ("Команда працює з даними щодня. " * 12000) + "Це - помилка."
+        report = scan.build_report(text, "marketing", None)
+        self.assertGreaterEqual(report["counts"]["errors"], 1)
+        self.assertLess(report["scores"]["norm"], 90)
+        self.assertNotEqual(report["band"], "чисто")
+
+    def test_spatial_na_protyazi_is_not_a_surzhyk(self) -> None:
+        clean = scan.build_report("Дорога тягнеться на протязі річки й губиться в тумані.", "marketing", None)
+        self.assertNotIn("HB20", {item["id"] for item in clean["hard_bans"]})
+
+        wrong = scan.build_report("На протязі року ми працювали над проєктом.", "marketing", None)
+        self.assertIn("HB20", {item["id"] for item in wrong["hard_bans"]})
+
+    def test_first_than_is_not_a_claim(self) -> None:
+        for text in ("Перше ніж вирушати, перевір прогноз.", "По-перше, візьми снасті."):
+            with self.subTest(text=text):
+                report = scan.build_report(text, "marketing", None)
+                kinds = {risk["kind"] for risk in report["facts"]["risks"]}
+                self.assertNotIn("квантор без джерела", kinds)
 
     def test_language_guard_rejects_non_cyrillic(self) -> None:
         for text in (
@@ -241,6 +279,16 @@ class ScannerTests(unittest.TestCase):
             self.assertIn(rule["id"], hard_bans)
         for rule in MARKERS:
             self.assertIn(rule["id"], catalog)
+
+    def test_scanner_markers_are_marked_in_catalog(self) -> None:
+        from rules_ua import MARKERS
+
+        catalog = (SKILL_ROOT / "references" / "catalog.md").read_text(encoding="utf-8")
+        for rule in MARKERS:
+            with self.subTest(rule=rule["id"]):
+                block = re.search(rf"(?ms)^### {rule['id']}\..*?(?=^### |\Z)", catalog)
+                self.assertIsNotNone(block)
+                self.assertIn("**Сканер:**", block.group(0))
 
     def test_unique_rule_ids(self) -> None:
         from rules_ua import HARD_BANS, MARKERS

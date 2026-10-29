@@ -93,6 +93,11 @@ def build_report(text: str, genre: str, before: str | None = None, allow_mixed: 
 
     if not has_cyrillic(text):
         diagnostics.append("LANG_NOT_UK")
+    elif allow_mixed and share < 0.2:
+        # Суржик — це суміш, а не чужа мова. Нижче 20 % українських ознак
+        # прапорець не рятує: інакше чистий російський текст без ї/ы/э/ъ
+        # отримував би «чисто».
+        diagnostics.append("LANG_NOT_UK")
     elif not allow_mixed and not is_ukrainian(text):
         diagnostics.append("LANG_NOT_UK")
     elif allow_mixed and share < 0.8:
@@ -114,7 +119,9 @@ def build_report(text: str, genre: str, before: str | None = None, allow_mixed: 
 
     findings = rules + metrics
     scores = scoring.sub_scores(findings)
-    has_errors = any(item["severity"] == "error" and item["penalty"] > 0.5 for item in rules)
+    # Помилка — бінарна подія, а не плотнісна. На довгому тексті її штраф
+    # прямує до нуля, але полосу «чисто» вона все одно блокує.
+    has_errors = any(item["severity"] == "error" and item["penalty"] > 0 for item in rules)
     cleanliness = None if "LANG_NOT_UK" in diagnostics else scoring.composite(scores, genre)
     label = "немає оцінки" if cleanliness is None else scoring.band(cleanliness, scores, genre, has_errors)
 
@@ -251,7 +258,12 @@ def format_report(report: dict, quiet: bool = False, verbose: bool = False) -> s
         )
 
     head = f"ЧИСТОТА: {report['score']}/100  [{report['genre']}] · {report['band']}"
-    lines = [head, *_summary_lines(report), f"  слів: {report['words']}"]
+    lines = [
+        head,
+        *_summary_lines(report),
+        f"  слів: {report['words']}",
+        f"  покриття: {len(MARKERS)} із 80 маркерів + {len(HARD_BANS)} заборон",
+    ]
 
     limit = None if verbose else 60
     printed = 0

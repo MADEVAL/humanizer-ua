@@ -28,6 +28,10 @@ PROFILES = {
 
 LAYERS = ("norm", "style", "structure")
 
+# Одна нормативна помилка — це не «99.9 зі знаком питання». Вона опускає
+# шкалу нижче порогу 90, навіть якщо текст дуже довгий і плотність мала.
+NORM_ERROR_FLOOR = 11.0
+
 
 def event_penalty(events: int, words: int, severity: str, confidence: float, max_events: int | None = None) -> float:
     """Штраф за правило з урахуванням плотності й уверенності."""
@@ -52,6 +56,8 @@ def sub_scores(items: list[dict]) -> dict[str, float]:
         share = item.get("penalty", 0.0) / len(layers)
         for layer in layers:
             losses[layer] = losses.get(layer, 0.0) + share
+        if item.get("severity") == "error" and item.get("layer") == "norm" and item.get("penalty", 0) > 0:
+            losses["norm"] = max(losses["norm"], NORM_ERROR_FLOOR)
     return {layer: round(100 - min(100.0, losses[layer]), 1) for layer in LAYERS}
 
 

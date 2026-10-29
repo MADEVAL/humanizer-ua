@@ -183,6 +183,13 @@ def check_rules() -> None:
     else:
         ok(f"rules-markers ({len(MARKERS)})")
 
+    marked = set(re.findall(r"(?m)^\*\*Сканер:\*\*.*?`([A-H]\d+)`", catalog))
+    unmarked = [rule["id"] for rule in MARKERS if rule["id"] not in marked]
+    if unmarked:
+        fail("rules-marks", "немає позначки «**Сканер:**»: " + ", ".join(unmarked))
+    else:
+        ok(f"rules-marks ({len(marked)} позначок)")
+
     patched = [rule for rule in HARD_BANS + MARKERS if rule.get("pattern") or rule.get("patterns")]
     if len(patched) != len(HARD_BANS) + len(MARKERS):
         fail("rules-patterns", "є правило без pattern")

@@ -53,7 +53,9 @@ CLAIM_WORDS = {
     "найшвидший", "найдешевший",
 }
 CLAIM_RE = re.compile(
-    r"\b(?:перш(?:ий|а|е|і|ого|ому|им|их)|єдин(?:ий|а|е|і|ого|ому|им|их)|"
+    # «По-перше» і «перше ніж» — не квантори й не рекорди.
+    r"(?<!по-)\bперш(?:ий|а|е|і|ого|ому|им|их)\b(?!\s+ніж)|"
+    r"\b(?:єдин(?:ий|а|е|і|ого|ому|им|их)|"
     r"вперше|найбільш(?:ий|а|і|ого|ому|им|их)|найкращ(?:ий|а|і|ого|ому|им|их)|"
     r"рекордн\w*|найстарш(?:ий|а|і|ого|ому|им|их)|ніколи|ніхто|"
     r"назавжди|безпрецедентн\w*|найшвидш(?:ий|а|і|ого|ому|им|их)|"
@@ -266,11 +268,15 @@ def extract_facts(text: str) -> Facts:
         after = body[match.end() : match.end() + 1]
         before = body[max(0, match.start() - 2) : match.start()]
         label = after == ":" or before == "**"
+        ordinary_first = lower.startswith("перш") and (
+            body[max(0, match.start() - 3) : match.start()].lower().endswith("по-")
+            or body[match.end() : match.end() + 5].lower().startswith(" ніж")
+        )
         if lower in SOFT_NUMERALS:
             _add(facts, facts.soft, "кількість:" + lower, token)
         elif lower in HARD_NUMERALS:
             _add(facts, facts.hard, "число словами:" + lower, token)
-        elif lower in CLAIM_WORDS:
+        elif lower in CLAIM_WORDS and not ordinary_first:
             _add(facts, facts.claims, "квантор:" + lower, token)
         elif not label and lower not in CLAIM_WORDS and _is_name(token, match.start() in starts):
             _add(facts, facts.hard, "ім'я:" + lower, token)
