@@ -6,7 +6,7 @@ This repository contains the `humanizer-ua` skill: a Ukrainian text editor for a
 
 - `skills/humanizer-ua/SKILL.md` is the product. Keep it short; every word is read on each use.
 - Reference files explain one topic each. Do not duplicate the whole catalog in `SKILL.md`.
-- Rule IDs are stable: `HB01–HB30` for hard bans, `N01–N15` for the norm layer, `A1–H6` for catalog markers. Do not renumber. Adding a pattern means a new ID in its group, never a shift of the others.
+- Rule IDs are stable: `HB01-HB30` for hard bans, `N01-N16` for the norm layer, `A1-H6` for catalog markers. Do not renumber. Adding a pattern means a new ID in its group, never a shift of the others.
 - If you add a scanner rule, add it to `references/hard-bans.md` or `references/catalog.md`, add a test, and update `CHANGELOG.md`.
 - Keep versions in sync: `SKILL.md` (`metadata.version`), `CHANGELOG.md`, `.claude-plugin/plugin.json`, `.cursor-plugin/plugin.json`.
 - Write in Ukrainian for skill content. Use plain language, active voice, short sentences.

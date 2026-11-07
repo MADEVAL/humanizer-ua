@@ -1,10 +1,12 @@
 # Humanizer-UA
 
+\[ [Українська](README.md) | **English** \]
+
 More skills: [skills.sh/madeval](https://www.skills.sh/madeval)
 
 Ukrainian text that sounds like a person.
 
-An agent skill that edits Ukrainian prose: removes AI fingerprints, bureaucratese, surzhyk, Russianisms, and calques while keeping meaning, facts, and the author's voice.
+An agent skill that edits Ukrainian prose: removes AI fingerprints, bureaucratese, surzhyk, Russianisms, and calques while keeping meaning, facts, and the author's voice. **Skill class:** lean - a compact routing file plus on-demand references.
 
 [github.com/MADEVAL/humanizer-ua](https://github.com/MADEVAL/humanizer-ua) - author: [Yevhen Leonidov](https://github.com/MADEVAL)
 
@@ -60,7 +62,19 @@ The score is the scanner's rules, not a probability of AI authorship, and not a 
 ## Requirements
 
 - Plain Markdown for the skill itself.
-- Python 3.10+ only for the optional scanner, tests, and eval harness.
+- Python 3.9+ only for the optional scanner, tests, and eval harness.
+
+## GitHub Description
+
+```
+Ukrainian text editing: removes AI fingerprints, bureaucratese, surzhyk, Russianisms, and calques while keeping meaning, facts, and the author's voice.
+```
+
+## GitHub Tags
+
+`ai` `ai-agents` `ukrainian` `humanizer` `editing` `prompt-engineering` `ai-writing`
+
+Skills.sh: https://www.skills.sh/madeval/humanizer-ua
 
 ## License
 
