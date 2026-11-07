@@ -129,7 +129,7 @@ def check_frontmatter() -> None:
         return
     version = match.group(1)
     changelog = read(ROOT / "CHANGELOG.md")
-    if f"## {version}" not in changelog:
+    if not re.search(rf"^## \[?{re.escape(version)}\]?", changelog, re.MULTILINE):
         fail("version", f"CHANGELOG не має ## {version}")
         return
     for manifest in (".claude-plugin/plugin.json", ".cursor-plugin/plugin.json"):

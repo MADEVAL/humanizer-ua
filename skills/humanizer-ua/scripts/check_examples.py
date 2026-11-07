@@ -81,8 +81,8 @@ def main() -> int:
     hard = (SKILL / "references" / "hard-bans.md").read_text(encoding="utf-8")
     if len(re.findall(r"\*\*HB[0-9]{2}\*\*", hard)) != 30:
         errors.append("hard-bans.md: не 30 заборон")
-    if len(re.findall(r"\*\*N[0-9]{2}\*\*", hard)) != 15:
-        errors.append("hard-bans.md: не 15 нормативних правил")
+    if len(re.findall(r"\*\*N[0-9]{2}\*\*", hard)) != 16:
+        errors.append("hard-bans.md: не 16 нормативних правил")
 
     if "80 маркерів" not in readme:
         errors.append("README: немає «80 маркерів»")

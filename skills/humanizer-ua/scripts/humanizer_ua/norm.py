@@ -12,14 +12,14 @@ from __future__ import annotations
 NORM_RULES = [
     {
         "id": "N01",
-        "label": "Дефіс замість тире",
-        "pattern": r"(?<=\S)[ \t]+-[ \t]+(?=\S)",
-        "hint": "Постав тире: «це — помилка».",
+        "label": "Тире замість дефіса",
+        "pattern": r"—",
+        "hint": "Постав дефіс: «це - помилка».",
         "layer": "norm",
         "severity": "error",
         "weight": 8,
         "exempt": ("fiction",),
-        "suggestion": "заміни пробільний дефіс на тире —",
+        "suggestion": "заміни тире на дефіс -",
     },
     {
         "id": "N02",
@@ -90,14 +90,14 @@ NORM_RULES = [
     },
     {
         "id": "N07",
-        "label": "Діапазон через дефіс",
-        "pattern": r"(?<![\d-])\d{1,4}[ \t]*-[ \t]*\d{1,4}(?![\d-])",
-        "hint": "Діапазон пишеться коротким тире без пробілів: 10–20.",
+        "label": "Діапазон через коротке тире",
+        "pattern": r"(?<![\d-])\d{1,4}[ \t]*–[ \t]*\d{1,4}(?![\d-])",
+        "hint": "Діапазон пишеться дефісом без пробілів: 10-20.",
         "layer": "norm",
         "severity": "error",
         "weight": 6,
         "exempt": (),
-        "suggestion": "10–20",
+        "suggestion": "10-20",
     },
     {
         "id": "N08",
@@ -146,6 +146,17 @@ NORM_RULES = [
         "weight": 9,
         "exempt": (),
         "suggestion": "одна абетка в слові",
+    },
+    {
+        "id": "N16",
+        "label": "Коротке тире замість дефіса",
+        "pattern": r"(?<!\d)–(?!\d)",
+        "hint": "Постав дефіс: «Київ-Львів».",
+        "layer": "norm",
+        "severity": "error",
+        "weight": 6,
+        "exempt": (),
+        "suggestion": "заміни коротке тире на дефіс -",
     },
 ]
 

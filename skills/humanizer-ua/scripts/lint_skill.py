@@ -79,7 +79,7 @@ def check_frontmatter() -> None:
         fail("frontmatter: немає metadata.version")
         return
     changelog = read(ROOT / "CHANGELOG.md")
-    if f"## {version.group(1)}" not in changelog:
+    if not re.search(rf"^## \[?{re.escape(version.group(1))}\]?", changelog, re.MULTILINE):
         fail(f"CHANGELOG не має ## {version.group(1)}")
 
 

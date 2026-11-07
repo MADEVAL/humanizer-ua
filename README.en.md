@@ -10,7 +10,7 @@ An agent skill that edits Ukrainian prose: removes AI fingerprints, bureaucrates
 
 ## What it does
 
-- Removes 30 hard bans and 11 norm-layer errors, and works with an 80-marker catalog in eight groups.
+- Removes 30 hard bans and 12 norm-layer errors, and works with an 80-marker catalog in eight groups.
 - Enforces a fact lock: numbers, dates, names, quotes, conditions, and modality do not change.
 - Edits locally: a problem in one sentence does not trigger a rewrite of the whole text.
 - Respects genre: marketing, expert, business letter, news, academic, documentation, legal, fiction.
@@ -32,9 +32,16 @@ An agent skill that edits Ukrainian prose: removes AI fingerprints, bureaucrates
 
 ```bash
 git clone https://github.com/MADEVAL/humanizer-ua.git
+cd humanizer-ua
+python install.py --target all
+```
+
+Or copy the skill folder by hand:
+
+```bash
 mkdir -p ~/.claude/skills ~/.config/opencode/skills
-cp -r humanizer-ua/skills/humanizer-ua ~/.claude/skills/
-cp -r humanizer-ua/skills/humanizer-ua ~/.config/opencode/skills/
+cp -r skills/humanizer-ua ~/.claude/skills/
+cp -r skills/humanizer-ua ~/.config/opencode/skills/
 ```
 
 The skill folder is `skills/humanizer-ua/`; the repository root also holds the eval harness, commands, and plugin manifests.

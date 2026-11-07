@@ -17,7 +17,6 @@ FILES = [
     SKILL / "references" / "registers.md",
     SKILL / "references" / "review.md",
     SKILL / "references" / "voice.md",
-    SKILL / "references" / "typography.md",
     ROOT / "README.md",
     ROOT / "AGENTS.md",
 ]

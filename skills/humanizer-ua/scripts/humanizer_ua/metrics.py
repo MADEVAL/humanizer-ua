@@ -134,17 +134,6 @@ def collect_metrics(raw: str, masked: str, words: int, genre: str) -> list[dict]
     safe_words = max(words, 1)
     lengths = [count_words(sentence) for sentence in sentences(masked)]
 
-    # Тире як стилістичний прийом. Самотнє тире — норма, дефіс замість
-    # тире ловить N01, а не ця метрика. У художньому тексті тире — це
-    # пунктуація діалогу, тому метрику не застосовуємо.
-    if genre != "fiction":
-        dash_count = len(re.findall(r"(?<=\s)[—–](?=\s)", masked))
-        dash_limit = max(2.0, words / 120)
-        if dash_count > dash_limit:
-            metrics.append(
-                _metric("dash", "Багато тире", dash_count, dash_limit, min(10, int(round((dash_count - dash_limit) * 3))), f"{dash_count} на {words} слів")
-            )
-
     # Болд
     bold_count = len(re.findall(r"\*\*[^*\n]{1,120}\*\*", raw))
     bold_limit = max(2.0, words / 500)

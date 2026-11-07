@@ -50,6 +50,6 @@ python eval/run_triggers.py
 
 - Use «» for quotes.
 - Use ’ for apostrophes in prose.
-- Use — with spaces for dashes; – without spaces for ranges.
+- Use `-` for dashes and ranges. Do not use `—` or `–` in prose; `N01`, `N07`, and `N16` flag them.
 - Use sentence case in headings.
 - Russian letters (`ё`, `ы`, `э`, `ъ`) are errors in Ukrainian text.

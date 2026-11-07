@@ -156,7 +156,7 @@ class ScannerTests(unittest.TestCase):
         self.assertIsNone(report["score"])
 
     def test_error_blocks_clean_on_long_text(self) -> None:
-        text = ("Команда працює з даними щодня. " * 12000) + "Це - помилка."
+        text = ("Команда працює з даними щодня. " * 12000) + "Це — помилка."
         report = scan.build_report(text, "marketing", None)
         self.assertGreaterEqual(report["counts"]["errors"], 1)
         self.assertLess(report["scores"]["norm"], 90)
