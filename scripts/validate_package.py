@@ -288,6 +288,29 @@ def check_package_layout() -> None:
     ok("layout")
 
 
+def check_docs_dashes() -> None:
+    """Документація репозиторію теж тримає дефіс: тире в прозі заборонене."""
+    offenders: list[str] = []
+    for name in ("CHANGELOG.md", "AGENTS.md", "README.md", "README.en.md"):
+        path = ROOT / name
+        if not path.exists():
+            continue
+        in_fence = False
+        for lineno, line in enumerate(read(path).splitlines(), 1):
+            if line.strip().startswith("```"):
+                in_fence = not in_fence
+                continue
+            if in_fence:
+                continue
+            prose = re.sub(r"`[^`]*`", "", line)
+            if "\u2014" in prose or "\u2013" in prose:
+                offenders.append(f"{name}:{lineno}")
+    if offenders:
+        fail("docs-dashes", "тире в прозі: " + ", ".join(offenders))
+    else:
+        ok("docs-dashes")
+
+
 def check_scanner() -> None:
     result = subprocess.run(
         [sys.executable, str(SKILL / "scripts" / "scan.py"), "--version"],
@@ -342,6 +365,7 @@ def main() -> int:
     check_dist()
     check_catalog()
     check_package_layout()
+    check_docs_dashes()
     check_scanner()
 
     if args.full:
