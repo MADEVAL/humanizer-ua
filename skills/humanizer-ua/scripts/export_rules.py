@@ -35,7 +35,7 @@ def main(argv: list[str] | None = None) -> int:
         "norm": NORM_RULES,
         "markers": MARKERS,
     }
-    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    output.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
     print(
         f"RESULT: PASS export-rules ({output}, "
         f"{len(HARD_BANS)} заборон, {len(NORM_RULES)} норм, {len(MARKERS)} маркерів)"

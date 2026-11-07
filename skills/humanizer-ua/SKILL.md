@@ -5,7 +5,7 @@ license: MIT
 compatibility: Plain Markdown. Optional Python 3.9+ for scripts/scan.py.
 metadata:
   author: Yevhen Leonidov
-  version: "1.4.0"
+  version: "1.4.1"
   languages: [uk]
   repository: "https://github.com/MADEVAL/humanizer-ua"
 ---

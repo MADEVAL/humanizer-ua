@@ -29,7 +29,7 @@ def update_json(path: Path, version: str) -> None:
             plugin["version"] = version
     else:
         data["version"] = version
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8", newline="\n")
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -45,12 +45,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         skill_path = SKILL / "SKILL.md"
-        skill_path.write_text(replace_version(skill_path.read_text(encoding="utf-8"), args.version), encoding="utf-8")
+        skill_path.write_text(replace_version(skill_path.read_text(encoding="utf-8"), args.version), encoding="utf-8", newline="\n")
 
         version_path = SKILL / "scripts" / "humanizer_ua" / "version.py"
         version_path.write_text(
             re.sub(r'(?m)^VERSION = "[^"]+"', f'VERSION = "{args.version}"', version_path.read_text(encoding="utf-8")),
             encoding="utf-8",
+            newline="\n",
         )
 
         for manifest in (ROOT / ".claude-plugin" / "plugin.json", ROOT / ".cursor-plugin" / "plugin.json", ROOT / ".claude-plugin" / "marketplace.json"):
@@ -59,9 +60,9 @@ def main(argv: list[str] | None = None) -> int:
         changelog = ROOT / "CHANGELOG.md"
         text = changelog.read_text(encoding="utf-8")
         if f"## {args.version}" not in text:
-            entry = f"## {args.version} — {args.date}\n\n- {args.note}\n\n"
+            entry = f"## [{args.version}] - {args.date}\n\n- {args.note}\n\n"
             text = text.replace("# Changelog\n\n", "# Changelog\n\n" + entry, 1)
-            changelog.write_text(text, encoding="utf-8")
+            changelog.write_text(text, encoding="utf-8", newline="\n")
 
         exported = subprocess.run(
             [sys.executable, str(SKILL / "scripts" / "export_rules.py")],

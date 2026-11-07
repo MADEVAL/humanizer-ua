@@ -1,6 +1,6 @@
 # Humanizer-UA
 
-[![Version](https://img.shields.io/badge/version-1.4.0-blue)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-1.4.1-blue)](CHANGELOG.md)
 
 \[ [English](README.en.md) \]
 

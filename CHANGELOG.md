@@ -2,6 +2,12 @@
 
 Усі помітні зміни Humanizer-UA задокументовані тут. Формат - [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), версії - [Semantic Versioning](https://semver.org/).
 
+## [1.4.1] - 2026-11-07
+
+- **Інсталятор.** `install.py` копіює `LICENSE` у встановлений скіл і враховує його в `--check`.
+- **Версії.** `SKILL.md`, манифести й `dist/rules-ua.json` синхронізовані на 1.4.1.
+- **Генератори.** `export_rules.py` і `bump_version.py` пишуть LF; `bump_version.py` використовує дефіс і дужки у версії CHANGELOG.
+
 ## [1.4.0] - 2026-11-07
 
 House style: only hyphens. The norm layer now owns dashes.
